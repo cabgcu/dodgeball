@@ -1099,7 +1099,8 @@ exception
     return jsonb_build_object('ok', false, 'error', 'That name, code or email was just taken. Please try again.', 'code', 'ERROR');
   when others then
     perform app_private.log('error', coalesce(action, '?') || ': ' || sqlstate || ' ' || sqlerrm);
-    return jsonb_build_object('ok', false, 'error', 'Something went wrong on the server. Please try again.', 'code', 'ERROR');
+    return jsonb_build_object('ok', false, 'code', 'ERROR',
+      'error', 'Something went wrong on the server (' || coalesce(action, '?') || ' / ' || sqlstate || '). Please try again.');
 end $$;
 
 revoke all on function public.dodgeball_api(text, jsonb, text) from public;
