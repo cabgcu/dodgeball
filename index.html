@@ -809,6 +809,7 @@
                         <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-green-100 text-green-600 text-2xl mb-4">✓</div>
                         <h2 class="text-2xl sm:text-3xl font-black text-slate-900">${title}</h2>
                         <p class="text-slate-600 mt-2">${subtitle}</p>
+                        ${res.emailSent ? `<p class="text-sm text-slate-500 mt-3">📧 We emailed a copy${code ? ' with your team code' : ''} to <b>${esc(maskEmail((player.email || '').trim().toLowerCase()))}</b>. Check your spam folder if you don't see it.</p>` : ''}
                     </div>
                     <dl class="mx-6 sm:mx-8 mb-6 divide-y divide-slate-100 border border-slate-200 rounded-xl text-sm">
                         ${rows.map(([k, v]) => `<div class="flex justify-between gap-4 px-4 py-3"><dt class="text-slate-500">${k}</dt><dd class="font-semibold text-slate-900 text-right">${v}</dd></div>`).join('')}

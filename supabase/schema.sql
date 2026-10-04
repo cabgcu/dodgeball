@@ -23,6 +23,12 @@
 -- =============================================================================
 
 create extension if not exists pgcrypto with schema extensions;
+-- pg_net sends the confirmation emails (HTTP calls to Brevo) after the transaction commits.
+do $$ begin
+  create extension if not exists pg_net;
+exception when others then
+  raise notice 'pg_net is not available, so confirmation emails are off: %', sqlerrm;
+end $$;
 
 create schema if not exists app_private;
 revoke all on schema app_private from public;
@@ -130,6 +136,16 @@ create table if not exists app_private.admin_sessions (
   expires_at  timestamptz not null
 );
 
+-- Confirmation emails (Brevo). Off until brevo_api_key is set. See supabase/README.md.
+create table if not exists app_private.email_config (
+  id             int primary key default 1 check (id = 1),
+  brevo_api_key  text,
+  sender_email   text not null default 'noreply@cabgcu.com',
+  sender_name    text not null default 'Dodgeball After Dark',
+  site_url       text   -- the sign-up page; share links in emails point here
+);
+insert into app_private.email_config default values on conflict do nothing;
+
 create table if not exists app_private.event_log (
   id       bigint generated always as identity primary key,
   at       timestamptz not null default now(),
@@ -146,6 +162,7 @@ alter table app_private.timers            enable row level security;
 alter table app_private.checkin_snapshots enable row level security;
 alter table app_private.admin_config      enable row level security;
 alter table app_private.admin_sessions    enable row level security;
+alter table app_private.email_config      enable row level security;
 alter table app_private.event_log         enable row level security;
 
 -- Public change signal for Realtime (contains no data, just a counter).
@@ -420,6 +437,138 @@ language sql stable as $$
 $$;
 
 -- ---------------------------------------------------------------------------
+--  Confirmation emails (Brevo, sent through pg_net)
+-- ---------------------------------------------------------------------------
+
+/** One-time setup from the SQL editor: select app_private.configure_email('xkeysib-…', 'https://…/'); */
+create or replace function app_private.configure_email(api_key text, site_url text default null) returns text
+language plpgsql as $$
+begin
+  update app_private.email_config set
+    brevo_api_key = nullif(btrim(coalesce(api_key, '')), ''),
+    site_url = coalesce(nullif(btrim(coalesce(configure_email.site_url, '')), ''), email_config.site_url)
+  where id = 1;
+  return case when nullif(btrim(coalesce(api_key, '')), '') is null then 'Confirmation emails are off.' else 'Confirmation emails are on.' end;
+end $$;
+
+create or replace function app_private.html(v text) returns text
+language sql immutable as $$
+  select replace(replace(replace(replace(replace(coalesce(v, ''), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '"', '&quot;'), '''', '&#39;');
+$$;
+
+/** The share link for a team, or null when site_url isn't configured. */
+create or replace function app_private.join_link(p_code text) returns text
+language sql stable as $$
+  select case when coalesce(site_url, '') = '' then null
+    else site_url || '?join=' || p_code end
+  from app_private.email_config where id = 1;
+$$;
+
+/** Branded email around body_html (already escaped). rows are [label, value] pairs; values get escaped here. */
+create or replace function app_private.email_html(heading text, intro text, rows jsonb, body_html text default '', button_label text default null, button_url text default null)
+returns text
+language plpgsql stable as $$
+declare
+  r jsonb;
+  rows_html text := '';
+begin
+  for r in select * from jsonb_array_elements(coalesce(rows, '[]'::jsonb)) loop
+    continue when coalesce(r->>1, '') = '';
+    rows_html := rows_html || '<tr><td style="padding:10px 16px;color:#64748b;font-size:14px;border-top:1px solid #f1f5f9;">' || app_private.html(r->>0)
+      || '</td><td style="padding:10px 16px;color:#0f172a;font-size:14px;font-weight:700;text-align:right;word-break:break-all;border-top:1px solid #f1f5f9;'
+      || case when r->>0 = 'Team code' then 'font-family:monospace;font-size:18px;letter-spacing:3px;color:#dc2626;' else '' end
+      || '">' || app_private.html(r->>1) || '</td></tr>';
+  end loop;
+  return '<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Inter,sans-serif;">'
+    || '<table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;"><tr><td align="center">'
+    || '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;">'
+    || '<tr><td style="padding:32px;text-align:center;background:linear-gradient(135deg,#7f1d1d,#dc2626);background-color:#b91c1c;">'
+    || '<div style="font-size:12px;font-weight:800;letter-spacing:3px;color:#fecaca;text-transform:uppercase;">Dodgeball After Dark</div>'
+    || '<h1 style="margin:8px 0 0;font-size:26px;font-weight:900;color:#ffffff;">' || app_private.html(heading) || '</h1></td></tr>'
+    || '<tr><td style="padding:28px 32px 8px;"><p style="margin:0 0 20px;font-size:16px;line-height:1.5;color:#334155;">' || intro || '</p>'
+    || case when rows_html <> '' then '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:12px;border-collapse:separate;margin-bottom:20px;">'
+         || regexp_replace(rows_html, 'border-top:1px solid #f1f5f9;', '', '') || '</table>' else '' end
+    || coalesce(body_html, '')
+    || case when button_url is not null then '<div style="text-align:center;margin:8px 0 20px;"><a href="' || app_private.html(button_url)
+         || '" style="display:inline-block;padding:14px 32px;background:#dc2626;color:#ffffff;text-decoration:none;border-radius:10px;font-weight:700;font-size:16px;">'
+         || app_private.html(button_label) || '</a></div>' else '' end
+    || '</td></tr><tr><td style="padding:16px 32px 28px;"><p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;">'
+    || 'You''re getting this because this address was used to sign up for Dodgeball After Dark. If that wasn''t you, you can ignore this email.'
+    || '</p></td></tr></table></td></tr></table></body></html>';
+end $$;
+
+/**
+ * Queues an email with Brevo. pg_net only sends it once the registration commits, so a
+ * failed signup never sends anything. Never raises: a broken email setup must not block signups.
+ */
+create or replace function app_private.send_email(to_email text, to_name text, subject text, html_content text) returns boolean
+language plpgsql as $$
+declare cfg app_private.email_config;
+begin
+  select * into cfg from app_private.email_config where id = 1;
+  if coalesce(cfg.brevo_api_key, '') = '' or coalesce(to_email, '') = '' then return false; end if;
+  perform net.http_post(
+    url := 'https://api.brevo.com/v3/smtp/email',
+    headers := jsonb_build_object('api-key', cfg.brevo_api_key, 'Content-Type', 'application/json', 'Accept', 'application/json'),
+    body := jsonb_build_object(
+      'sender', jsonb_build_object('name', cfg.sender_name, 'email', cfg.sender_email),
+      'to', jsonb_build_array(jsonb_build_object('email', to_email, 'name', coalesce(nullif(to_name, ''), split_part(to_email, '@', 1)))),
+      'subject', subject,
+      'htmlContent', html_content));
+  return true;
+exception when others then
+  perform app_private.log('email:error', to_email || ': ' || sqlstate || ' ' || sqlerrm);
+  return false;
+end $$;
+
+create or replace function app_private.send_registration_emails(mode text, v_name text, v_email text, team app_private.teams, waitlist_pos int, invitees jsonb default '[]'::jsonb)
+returns boolean
+language plpgsql as $$
+declare
+  link text;
+  sent boolean := false;
+  inv jsonb;
+  manage_note constant text := '<p style="margin:0 0 20px;font-size:14px;line-height:1.5;color:#64748b;">Need to remove someone or make changes? Use <b>Manage My Team</b> on the sign-up page with your team code. Keep the code to yourself and your teammates: anyone who has it can join or manage the team.</p>';
+begin
+  if team.id is not null then link := app_private.join_link(team.code); end if;
+
+  if mode = 'create' then
+    sent := app_private.send_email(v_email, v_name, 'Your team "' || team.name || '" is registered – Dodgeball After Dark',
+      app_private.email_html('Your team is registered!',
+        'Hi ' || app_private.html(v_name) || ', <b>' || app_private.html(team.name) || '</b> is in, and you''re the captain. '
+          || 'Share your team code' || case when link is not null then ' or the link below' else '' end || ' so your teammates can join.',
+        jsonb_build_array(jsonb_build_array('Team', team.name), jsonb_build_array('Role', 'Captain'), jsonb_build_array('Team code', team.code),
+          jsonb_build_array('Share link', link)),
+        manage_note, case when link is not null then 'Open the join page' end, link));
+    -- Teammates the captain listed by email still have to confirm their spot.
+    for inv in select * from jsonb_array_elements(coalesce(invitees, '[]'::jsonb)) loop
+      continue when coalesce(inv->>'email', '') = '';
+      perform app_private.send_email(inv->>'email', inv->>'name', v_name || ' added you to "' || team.name || '" – Dodgeball After Dark',
+        app_private.email_html('You''ve been added to a team!',
+          'Hi ' || app_private.html(inv->>'name') || ', <b>' || app_private.html(v_name) || '</b> put you on <b>' || app_private.html(team.name)
+            || '</b> for Dodgeball After Dark. Confirm your spot by signing up with this email address and the team code below.',
+          jsonb_build_array(jsonb_build_array('Team', team.name), jsonb_build_array('Captain', v_name), jsonb_build_array('Team code', team.code)),
+          '', case when link is not null then 'Confirm my spot' end, link));
+    end loop;
+  elsif mode = 'join' then
+    sent := app_private.send_email(v_email, v_name, 'You''re on "' || team.name || '" – Dodgeball After Dark',
+      app_private.email_html('You''re on the team!',
+        'Hi ' || app_private.html(v_name) || ', you''ve joined <b>' || app_private.html(team.name) || '</b>. '
+          || 'Know someone else who should be on the team? Send them the code' || case when link is not null then ' or the link below' else '' end || '.',
+        jsonb_build_array(jsonb_build_array('Team', team.name), jsonb_build_array('Team code', team.code), jsonb_build_array('Share link', link)),
+        manage_note, case when link is not null then 'Open the join page' end, link));
+  else
+    link := (select nullif(site_url, '') from app_private.email_config where id = 1);
+    sent := app_private.send_email(v_email, v_name, 'You''re on the waitlist – Dodgeball After Dark',
+      app_private.email_html('You''re on the waitlist!',
+        'Hi ' || app_private.html(v_name) || ', you''re signed up as a free agent. We''ll place you on a team as spots open up.',
+        jsonb_build_array(jsonb_build_array('Status', 'Free agent (waitlist)'), jsonb_build_array('Place in line', '#' || waitlist_pos)),
+        '', case when link is not null then 'Invite your friends' end, link));
+  end if;
+  return sent;
+end $$;
+
+-- ---------------------------------------------------------------------------
 --  Registration (public)
 -- ---------------------------------------------------------------------------
 
@@ -521,7 +670,8 @@ begin
     return jsonb_build_object(
       'message', 'Your team "' || team.name || '" has been created! Share your code (' || team.code || ') with teammates so they can join. '
                  || 'Need to remove someone later? Use "Manage My Team" with the same code.',
-      'teamCode', team.code, 'teamName', team.name);
+      'teamCode', team.code, 'teamName', team.name,
+      'emailSent', app_private.send_registration_emails('create', v_name, v_email, team, null, extras));
   end if;
 
   if mode = 'join' then
@@ -538,7 +688,8 @@ begin
       perform app_private.assert_available('', v_sid, pre.id);
       update app_private.players set name = v_name, phone = v_phone, student_id = v_sid, updated_at = now() where id = pre.id;
       perform app_private.log('register:claim', v_name || ' <' || v_email || '> confirmed spot on ' || team.name);
-      return jsonb_build_object('message', 'You have confirmed your spot on "' || team.name || '"!', 'teamName', team.name, 'teamCode', team.code);
+      return jsonb_build_object('message', 'You have confirmed your spot on "' || team.name || '"!', 'teamName', team.name, 'teamCode', team.code,
+        'emailSent', app_private.send_registration_emails('join', v_name, v_email, team, null));
     end if;
 
     perform app_private.assert_available(v_email, v_sid);
@@ -549,7 +700,8 @@ begin
     insert into app_private.players (team_id, name, email, phone, student_id, role)
       values (team.id, v_name, v_email, v_phone, v_sid, 'Player');
     perform app_private.log('register:join', v_name || ' <' || v_email || '> joined ' || team.name);
-    return jsonb_build_object('message', 'You have successfully joined "' || team.name || '"!', 'teamName', team.name, 'teamCode', team.code);
+    return jsonb_build_object('message', 'You have successfully joined "' || team.name || '"!', 'teamName', team.name, 'teamCode', team.code,
+      'emailSent', app_private.send_registration_emails('join', v_name, v_email, team, null));
   end if;
 
   -- freeplay / waitlist
@@ -557,8 +709,10 @@ begin
   insert into app_private.players (team_id, name, email, phone, student_id, role)
     values (null, v_name, v_email, v_phone, v_sid, 'Player');
   perform app_private.log('register:waitlist', v_name || ' <' || v_email || '>');
+  roster_size := (select count(*) from app_private.players where team_id is null);
   return jsonb_build_object('message', 'You have been added to the waitlist! We will place you on a team if spots become available.',
-    'waitlistPosition', (select count(*) from app_private.players where team_id is null));
+    'waitlistPosition', roster_size,
+    'emailSent', app_private.send_registration_emails('freeplay', v_name, v_email, null, roster_size));
 end $$;
 
 -- ---------------------------------------------------------------------------
