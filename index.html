@@ -87,12 +87,17 @@
                     <p class="text-red-700 text-sm mt-2">Already on a team? You can still manage your roster with your team code below.</p>
                 </div>
 
+                <div id="waitlist-only-msg" class="hidden max-w-4xl mx-auto mb-6 flex items-start gap-3 px-5 py-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mt-0.5 shrink-0 text-amber-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                    <div class="text-sm"><b>Team registration is closed, but the waitlist is open.</b> Sign up as a free agent and we'll place you on a team as spots open up.</div>
+                </div>
+
                 <div id="registration-form-area">
                     <div class="flex flex-wrap justify-center gap-2 mb-8 border-b border-slate-200 pb-6">
-                        <button id="btn-create-team" onclick="setMode('create')" type="button" class="px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-brand-600 text-white shadow-md hover:bg-brand-700">Create a Team</button>
-                        <button id="btn-join-team" onclick="setMode('join')" type="button" class="px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200">Join a Team</button>
-                        <button id="btn-free-agent" onclick="setMode('freeplay')" type="button" style="display: none;" class="px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200">Free Agent (Waitlist)</button>
-                        <button id="btn-manage-team" onclick="setMode('manage')" type="button" class="px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200">Manage My Team</button>
+                        <button id="btn-create-team" onclick="pickMode('create')" type="button" class="px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-brand-600 text-white shadow-md hover:bg-brand-700">Create a Team</button>
+                        <button id="btn-join-team" onclick="pickMode('join')" type="button" class="px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200">Join a Team</button>
+                        <button id="btn-free-agent" onclick="pickMode('freeplay')" type="button" style="display: none;" class="px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200">Free Agent (Waitlist)</button>
+                        <button id="btn-manage-team" onclick="pickMode('manage')" type="button" class="px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200">Manage My Team</button>
                     </div>
 
                     <form id="dodgeballForm" onsubmit="submitForm(event)" class="space-y-8 max-w-4xl mx-auto">
@@ -116,7 +121,8 @@
                             <div id="join-team-fields" class="hidden space-y-4">
                                 <div>
                                     <label for="joinTeamCode" class="block text-sm font-medium text-slate-700 mb-1">Enter Team Code <span class="text-brand-600">*</span></label>
-                                    <input type="text" id="joinTeamCode" name="joinTeamCode" placeholder="e.g. A1B2C3" class="input-transition block w-full rounded-md border border-slate-300 px-4 py-3 text-slate-900 font-bold uppercase placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50">
+                                    <input type="text" id="joinTeamCode" name="joinTeamCode" oninput="scheduleJoinPreview()" autocomplete="off" placeholder="e.g. A1B2C3" class="input-transition block w-full rounded-md border border-slate-300 px-4 py-3 text-slate-900 font-bold uppercase placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50">
+                                    <div id="join-team-preview" class="hidden mt-3"></div>
                                 </div>
                             </div>
                         </div>
@@ -188,12 +194,7 @@
                     </div>
                 </div>
 
-                <div id="success-message" class="hidden text-center py-12 bg-green-50 rounded-xl border border-green-200 max-w-3xl mx-auto mt-8 shadow-sm">
-                    <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 mb-6 text-green-600 text-4xl shadow-inner">✓</div>
-                    <h2 class="text-3xl font-black text-green-900 mb-4">Registration Complete!</h2>
-                    <p id="success-desc" class="text-green-800 mb-8 text-xl leading-relaxed"></p>
-                    <button onclick="resetForm()" class="px-8 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition shadow-md">Register Another</button>
-                </div>
+                <div id="success-message" class="hidden max-w-2xl mx-auto"></div>
             </div>
 
             <!-- VIEW: BRACKET -->
@@ -391,6 +392,9 @@
             timers: [],
             adminToken: null,
             managed: null,
+            modeChosen: false,
+            pendingJoinCode: null,
+            share: null,
             clockOffset: 0,
             busy: false,
             loaded: false,
@@ -553,6 +557,11 @@
         const MODE_BTN_IDLE = "px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200";
         const MODE_BTN_ACTIVE = "px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-brand-600 text-white shadow-md hover:bg-brand-700";
 
+        function pickMode(mode) {
+            AppState.modeChosen = true;
+            setMode(mode);
+        }
+
         function setMode(mode) {
             AppState.currentMode = mode;
             document.getElementById('dodgeballForm').classList.toggle('hidden', mode === 'manage');
@@ -609,18 +618,22 @@
             document.getElementById('btn-join-team').style.display = regOpen ? '' : 'none';
             document.getElementById('btn-free-agent').style.display = wlOpen ? 'block' : 'none';
 
-            // Free agents can still sign up while team registration is closed, and teams can always be managed.
-            const formAvailable = regOpen || wlOpen;
+            // The two switches are independent: registration controls Create/Join, the waitlist controls
+            // free-agent sign-up, and Manage My Team is always available.
             const succeeded = !document.getElementById('success-message').classList.contains('hidden');
-            document.getElementById('registration-closed-msg').classList.toggle('hidden', formAvailable);
+            document.getElementById('registration-closed-msg').classList.toggle('hidden', regOpen || wlOpen || succeeded);
+            document.getElementById('waitlist-only-msg').classList.toggle('hidden', regOpen || !wlOpen || succeeded);
             document.getElementById('registration-form-area').classList.toggle('hidden', succeeded);
 
             if (!AppState.busy) {
+                const available = m => m === 'manage' || (m === 'freeplay' ? wlOpen : regOpen);
+                const preferred = regOpen ? (AppState.pendingJoinCode ? 'join' : 'create') : (wlOpen ? 'freeplay' : 'manage');
                 const mode = AppState.currentMode;
-                if (mode === 'manage') { /* always available */ }
-                else if (!formAvailable) setMode('manage');
-                else if (!regOpen && mode !== 'freeplay') setMode('freeplay');
-                else if (regOpen && !wlOpen && mode === 'freeplay') setMode('create');
+                // Follow the switches unless the person picked a mode that's still open.
+                if (!available(mode) || (!AppState.modeChosen && mode !== preferred)) {
+                    AppState.modeChosen = false;
+                    setMode(preferred);
+                }
             }
         }
 
@@ -706,14 +719,12 @@
             setBusy(true, "Submitting...");
             try {
                 const res = await api('register', payload);
-                document.getElementById('success-desc').innerText = res.message;
+                showConfirmation(mode, res, payload.player);
                 // Personal info is only shown while filling out the form; clear it once it's been sent.
                 e.target.reset();
                 document.getElementById('players-container').innerHTML = '';
                 addPlayerField(); addPlayerField();
                 generateTeamCode();
-                document.getElementById('registration-form-area').classList.add('hidden');
-                document.getElementById('success-message').classList.remove('hidden');
             } catch (err) {
                 // api() already showed the error
             } finally {
@@ -728,7 +739,150 @@
             generateTeamCode();
 
             document.getElementById('success-message').classList.add('hidden');
+            document.getElementById('join-team-preview').classList.add('hidden');
             renderSettings();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // ---------- Confirmation + share links ----------
+
+        function siteUrl() {
+            return location.origin + location.pathname;
+        }
+
+        function joinLink(code) {
+            return siteUrl() + '?join=' + encodeURIComponent(code);
+        }
+
+        function maskEmail(email) {
+            const at = (email || '').indexOf('@');
+            if (!email) return '';
+            return at < 1 ? '••••••' : email.charAt(0) + '•••••' + email.slice(at);
+        }
+
+        function showConfirmation(mode, res, player) {
+            const team = res.teamName || '';
+            const code = res.teamCode || '';
+            let title, subtitle, rows, share;
+            if (mode === 'create') {
+                title = 'Your team is registered!';
+                subtitle = `<b>${esc(team)}</b> is in. You're the captain.`;
+                share = {
+                    heading: 'Invite your teammates',
+                    blurb: 'Anyone who opens this link goes straight to the Join form with your team code filled in.',
+                    url: joinLink(code),
+                    text: `Join my dodgeball team "${team}" for Dodgeball After Dark! Sign up here:`,
+                };
+            } else if (mode === 'join') {
+                title = "You're on the team!";
+                subtitle = `You've joined <b>${esc(team)}</b>.`;
+                share = {
+                    heading: `Know someone else who should be on ${esc(team)}?`,
+                    blurb: 'Send them this link. It opens the Join form with the team code filled in.',
+                    url: joinLink(code),
+                    text: `Join our dodgeball team "${team}" for Dodgeball After Dark! Sign up here:`,
+                };
+            } else {
+                title = "You're on the waitlist!";
+                subtitle = `We'll place you on a team as spots open up${res.waitlistPosition ? `. You're <b>#${res.waitlistPosition}</b> in line` : ''}.`;
+                share = {
+                    heading: 'Bring your friends',
+                    blurb: 'Share the sign-up page so they can register too.',
+                    url: siteUrl(),
+                    text: 'Sign up for Dodgeball After Dark, the campus glow-in-the-dark dodgeball tournament:',
+                };
+            }
+            rows = [
+                ['Name', esc(player.name)],
+                ['Email', esc(maskEmail((player.email || '').trim().toLowerCase()))],
+                mode === 'freeplay' ? ['Status', 'Free agent (waitlist)'] : ['Team', esc(team)],
+                mode === 'create' ? ['Role', 'Captain'] : null,
+                code ? ['Team code', `<span class="font-mono font-black tracking-widest text-brand-600">${esc(code)}</span>`] : null,
+                res.waitlistPosition ? ['Place in line', '#' + res.waitlistPosition] : null,
+            ].filter(Boolean);
+            AppState.share = share;
+
+            const canNativeShare = !!navigator.share;
+            document.getElementById('success-message').innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden fade-in">
+                    <div class="px-6 sm:px-8 pt-8 pb-6 text-center bg-gradient-to-b from-green-50 to-white">
+                        <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-green-100 text-green-600 text-2xl mb-4">✓</div>
+                        <h2 class="text-2xl sm:text-3xl font-black text-slate-900">${title}</h2>
+                        <p class="text-slate-600 mt-2">${subtitle}</p>
+                    </div>
+                    <dl class="mx-6 sm:mx-8 mb-6 divide-y divide-slate-100 border border-slate-200 rounded-xl text-sm">
+                        ${rows.map(([k, v]) => `<div class="flex justify-between gap-4 px-4 py-3"><dt class="text-slate-500">${k}</dt><dd class="font-semibold text-slate-900 text-right">${v}</dd></div>`).join('')}
+                    </dl>
+                    <div class="mx-6 sm:mx-8 mb-6 p-5 bg-slate-50 border border-slate-200 rounded-xl">
+                        <h3 class="font-bold text-slate-900">${share.heading}</h3>
+                        <p class="text-sm text-slate-500 mt-1 mb-4">${share.blurb}</p>
+                        <div class="flex gap-2">
+                            <input id="share-link" readonly value="${esc(share.url)}" onclick="this.select()" class="flex-1 min-w-0 px-3 py-2.5 rounded-lg border border-slate-300 bg-white text-sm text-slate-700 font-mono">
+                            <button onclick="copyShareLink()" id="copy-link-btn" class="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors whitespace-nowrap">Copy link</button>
+                        </div>
+                        <div class="grid ${canNativeShare ? 'grid-cols-3' : 'grid-cols-2'} gap-2 mt-3">
+                            ${canNativeShare ? '<button onclick="nativeShare()" class="py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg transition-colors">Share…</button>' : ''}
+                            <a href="sms:?&body=${encodeURIComponent(share.text + ' ' + share.url)}" class="py-2 text-center bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg transition-colors">Text</a>
+                            <a href="mailto:?subject=${encodeURIComponent('Dodgeball After Dark')}&body=${encodeURIComponent(share.text + '\n\n' + share.url)}" class="py-2 text-center bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg transition-colors">Email</a>
+                        </div>
+                    </div>
+                    ${mode === 'create' ? `<p class="mx-6 sm:mx-8 mb-6 text-xs text-slate-500">Keep your team code <b class="font-mono">${esc(code)}</b> handy. You'll need it in <b>Manage My Team</b> to remove players or delete the team.</p>` : ''}
+                    <div class="px-6 sm:px-8 py-5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                        <span class="text-xs text-slate-400">Tip: screenshot this page for your records.</span>
+                        <button onclick="resetForm()" class="px-5 py-2.5 bg-slate-900 hover:bg-slate-700 text-white text-sm font-semibold rounded-lg transition-colors">Register someone else</button>
+                    </div>
+                </div>`;
+            document.getElementById('registration-form-area').classList.add('hidden');
+            document.getElementById('waitlist-only-msg').classList.add('hidden');
+            document.getElementById('registration-closed-msg').classList.add('hidden');
+            document.getElementById('success-message').classList.remove('hidden');
+            window.scrollTo({ top: document.getElementById('success-message').offsetTop - 20, behavior: 'smooth' });
+        }
+
+        async function copyShareLink() {
+            const input = document.getElementById('share-link');
+            const btn = document.getElementById('copy-link-btn');
+            try {
+                await navigator.clipboard.writeText(input.value);
+            } catch (err) {
+                input.select();
+                document.execCommand('copy');
+            }
+            btn.innerText = 'Copied!';
+            setTimeout(() => { btn.innerText = 'Copy link'; }, 2000);
+        }
+
+        function nativeShare() {
+            const share = AppState.share;
+            if (share && navigator.share) navigator.share({ title: 'Dodgeball After Dark', text: share.text, url: share.url }).catch(() => {});
+        }
+
+        // Shows which team a code belongs to before someone joins it.
+        let joinPreviewTimer = null;
+        function scheduleJoinPreview() {
+            clearTimeout(joinPreviewTimer);
+            joinPreviewTimer = setTimeout(previewJoinCode, 400);
+        }
+
+        async function previewJoinCode() {
+            const box = document.getElementById('join-team-preview');
+            const teamCode = document.getElementById('joinTeamCode').value.trim().toUpperCase();
+            if (teamCode.length < 4) { box.classList.add('hidden'); return; }
+            const note = (cls, html) => {
+                box.className = `mt-3 px-4 py-3 rounded-lg border text-sm ${cls}`;
+                box.innerHTML = html;
+            };
+            try {
+                const res = await api('teamPreview', { teamCode }, { silent: true });
+                if (document.getElementById('joinTeamCode').value.trim().toUpperCase() !== teamCode) return;
+                const t = res.team;
+                if (t.eliminated) note('bg-red-50 border-red-200 text-red-800', `<b>${esc(t.name)}</b> has been eliminated and isn't taking new players.`);
+                else if (t.playerCount >= t.maxTeamSize) note('bg-red-50 border-red-200 text-red-800', `<b>${esc(t.name)}</b> is full (${t.playerCount}/${t.maxTeamSize} players).`);
+                else note('bg-green-50 border-green-200 text-green-800', `✓ You're joining <b>${esc(t.name)}</b> · ${t.playerCount}/${t.maxTeamSize} players`);
+            } catch (err) {
+                if (document.getElementById('joinTeamCode').value.trim().toUpperCase() !== teamCode) return;
+                note('bg-amber-50 border-amber-200 text-amber-900', esc(err.message || 'Could not look up that code.'));
+            }
         }
 
         // ---------- Manage My Team (team code required; contact info comes back redacted) ----------
@@ -1620,6 +1774,11 @@
 
         function init() {
             switchAdminTab('settings');
+            const joinCode = (new URLSearchParams(location.search).get('join') || '').trim().toUpperCase();
+            if (joinCode) {
+                AppState.pendingJoinCode = joinCode;
+                document.getElementById('joinTeamCode').value = joinCode;
+            }
             generateTeamCode();
             addPlayerField(); addPlayerField();
             try { AppState.adminToken = sessionStorage.getItem('dbAdminToken'); } catch (err) {}
@@ -1634,7 +1793,7 @@
             }
 
             if (location.hash === '#projector') enterProjectorMode();
-            loadState();
+            loadState().then(() => { if (AppState.pendingJoinCode) previewJoinCode(); });
             lastPoll = Date.now();
             subscribeToChanges();
             setInterval(tickTimers, 1000);
