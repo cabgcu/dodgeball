@@ -35,6 +35,9 @@
             background-image: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
         }
         .projector-timer { text-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
+
+        /* Student email / ID stay dotted while typing and after; only admins see the real values. */
+        .masked-input { -webkit-text-security: disc; text-security: disc; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col items-center">
@@ -83,6 +86,7 @@
                 <div id="registration-closed-msg" class="hidden text-center py-12 bg-red-50 rounded-xl border border-red-200 mb-8">
                     <h2 class="text-3xl font-black text-red-600 mb-2 uppercase">Registration Closed</h2>
                     <p class="text-red-800">The tournament brackets are being finalized. See you on the court!</p>
+                    <p class="text-red-700 text-sm mt-2">Already on a team? You can still manage your roster with your team code below.</p>
                 </div>
 
                 <div id="registration-form-area">
@@ -90,6 +94,7 @@
                         <button id="btn-create-team" onclick="setMode('create')" type="button" class="px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-brand-600 text-white shadow-md hover:bg-brand-700">Create a Team</button>
                         <button id="btn-join-team" onclick="setMode('join')" type="button" class="px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200">Join a Team</button>
                         <button id="btn-free-agent" onclick="setMode('freeplay')" type="button" style="display: none;" class="px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200">Free Agent (Waitlist)</button>
+                        <button id="btn-manage-team" onclick="setMode('manage')" type="button" class="px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200">Manage My Team</button>
                     </div>
 
                     <form id="dodgeballForm" onsubmit="submitForm(event)" class="space-y-8 max-w-4xl mx-auto">
@@ -137,16 +142,14 @@
                                         <span>Student Email <span class="text-brand-600">*</span></span>
                                         <span class="text-xs text-slate-400 italic">Hidden for security</span>
                                     </label>
-                                    <input type="text" name="captainEmail" required onblur="secureField(this, 'email')" onfocus="unsecureField(this)" placeholder="Enter Email" class="input-transition block w-full rounded-md border border-slate-300 px-4 py-2.5 text-sm placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50 font-mono">
-                                    <input type="hidden" name="captainEmail_real">
+                                    <input type="text" name="captainEmail" required inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Enter Email" class="masked-input input-transition block w-full rounded-md border border-slate-300 px-4 py-2.5 text-sm placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50 font-mono">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-slate-700 mb-1 flex justify-between">
                                         <span>Student ID # <span class="text-brand-600">*</span></span>
                                         <span class="text-xs text-slate-400 italic">Hidden for security</span>
                                     </label>
-                                    <input type="text" name="captainId" required onblur="secureField(this, 'text')" onfocus="unsecureField(this)" placeholder="Enter ID" class="input-transition block w-full rounded-md border border-slate-300 px-4 py-2.5 text-sm placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50 font-mono">
-                                    <input type="hidden" name="captainId_real">
+                                    <input type="text" name="captainId" required autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Enter ID" class="masked-input input-transition block w-full rounded-md border border-slate-300 px-4 py-2.5 text-sm placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50 font-mono">
                                 </div>
                             </div>
                         </div>
@@ -172,6 +175,19 @@
                             </button>
                         </div>
                     </form>
+
+                    <!-- Manage an existing team (team code required) -->
+                    <div id="manage-team-area" class="hidden max-w-4xl mx-auto space-y-6">
+                        <div class="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                            <h3 class="text-lg font-bold text-slate-800 mb-1">Manage Your Team</h3>
+                            <p class="text-sm text-slate-500 mb-4">Enter your team code to see your roster, remove players, or delete your team.</p>
+                            <form onsubmit="lookupManagedTeam(event)" class="flex flex-col sm:flex-row gap-3">
+                                <input type="text" id="manageTeamCode" placeholder="e.g. A1B2C3" autocomplete="off" autocapitalize="characters" spellcheck="false" class="input-transition flex-1 rounded-md border border-slate-300 px-4 py-3 text-slate-900 font-bold uppercase tracking-widest placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50">
+                                <button type="submit" id="manageLookupBtn" class="px-6 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-md shadow-md transition-colors">Find My Team</button>
+                            </form>
+                        </div>
+                        <div id="manage-team-result"></div>
+                    </div>
                 </div>
 
                 <div id="success-message" class="hidden text-center py-12 bg-green-50 rounded-xl border border-green-200 max-w-3xl mx-auto mt-8 shadow-sm">
@@ -186,11 +202,11 @@
             <div id="view-bracket" class="hidden p-6 sm:p-10">
                 <div class="text-center mb-8">
                     <h2 class="text-4xl font-black text-slate-900 mb-2 uppercase italic">Tournament Bracket</h2>
-                    <p class="text-slate-500">Matches are auto-seeded. Empty slots represent a Bye.</p>
+                    <p class="text-slate-500">Matches are auto-seeded. Open slots are marked Unassigned.</p>
                 </div>
 
-                <div class="overflow-x-auto pb-8 relative w-full rounded-xl border border-slate-200 bg-slate-50 flex justify-center shadow-inner min-h-[500px]">
-                    <div class="p-8 min-w-max relative flex flex-col" id="bracket-scroll-area">
+                <div class="overflow-x-auto pb-8 relative w-full rounded-xl border border-slate-200 bg-slate-50 shadow-inner min-h-[500px]">
+                    <div class="p-8 w-max mx-auto relative flex flex-col" id="bracket-scroll-area">
                         <div id="bracket-headers" class="relative h-12 mb-4 w-full"></div>
                         <div id="bracket-canvas" class="relative w-full flex-1"></div>
                     </div>
@@ -307,7 +323,7 @@
                                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                                     <div>
                                         <h3 class="text-xl font-bold text-white mb-1">Live Bracket Management</h3>
-                                        <p class="text-sm text-slate-400">Click on a team to advance them to the next round. This will eliminate the opponent.</p>
+                                        <p class="text-sm text-slate-400">Click on a team to advance them to the next round. This will eliminate the opponent. Made a mistake? Click the winner (✓) to undo.</p>
                                     </div>
                                     <button onclick="confirmResetBracket()" class="px-4 py-2 bg-slate-900 hover:bg-red-600 border border-slate-700 hover:border-red-500 text-white text-sm font-bold rounded-lg transition-all shadow-sm shrink-0">
                                         Reset Bracket Progress
@@ -330,13 +346,29 @@
                                     <h2 class="text-3xl font-black text-white mb-1">Roster & Check-In Manager</h2>
                                     <p class="text-slate-400 text-sm">Manage participants, view assignments, and track round attendance</p>
                                 </div>
-                                <div class="flex gap-3">
+                                <div class="flex flex-wrap gap-3">
+                                    <input type="search" id="roster-search" oninput="renderRosterTable()" placeholder="Search players, teams, emails..." class="w-64 px-3 py-2 rounded bg-slate-800 border border-slate-600 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500">
                                     <button onclick="addEmptyTeam()" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white text-sm font-bold rounded shadow transition">+ Add Empty Team</button>
                                 </div>
                             </div>
 
-                            <div id="admin-roster-cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                                <!-- Injected via JS -->
+                            <div id="admin-roster-summary" class="flex flex-wrap gap-3 text-xs font-bold"></div>
+
+                            <div class="overflow-x-auto rounded-xl border border-slate-700 shadow-lg">
+                                <table class="min-w-full text-sm text-left">
+                                    <thead class="bg-slate-950 text-slate-400 text-xs uppercase tracking-wider">
+                                        <tr>
+                                            <th class="px-4 py-3">Player</th>
+                                            <th class="px-4 py-3">Role</th>
+                                            <th class="px-4 py-3">Email</th>
+                                            <th class="px-4 py-3">Student ID</th>
+                                            <th class="px-4 py-3">Phone</th>
+                                            <th class="px-4 py-3 text-center">Check-In</th>
+                                            <th class="px-4 py-3 text-right">Remove</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admin-roster-table"></tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -350,11 +382,16 @@
         <div class="w-full flex justify-between items-center mb-12">
             <h1 class="text-6xl font-black text-white uppercase italic drop-shadow-2xl">Dodgeball <span class="text-brand-500">After Dark</span></h1>
             <div class="flex gap-8" id="projection-timers-container"></div>
-            <button onclick="closeProjectorMode()" class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg border border-slate-600 transition-colors shadow-lg">Exit Projector</button>
+            <div class="flex gap-3">
+                <button onclick="toggleFullscreen()" class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg border border-slate-600 transition-colors shadow-lg">Full Screen</button>
+                <button onclick="closeProjectorMode()" class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg border border-slate-600 transition-colors shadow-lg">Exit Projector</button>
+            </div>
         </div>
         <div class="w-full max-w-[95%] overflow-x-auto bg-slate-800/50 p-8 rounded-3xl border border-slate-700 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
-            <div id="proj-bracket-headers" class="relative h-16 mb-8 w-full"></div>
-            <div id="proj-bracket-canvas" class="relative w-full min-h-[600px]"></div>
+            <div class="w-max mx-auto">
+                <div id="proj-bracket-headers" class="relative h-16 mb-8 w-full"></div>
+                <div id="proj-bracket-canvas" class="relative w-full min-h-[600px]"></div>
+            </div>
         </div>
     </div>
 
@@ -381,6 +418,7 @@
             bracket: [],
             timers: [],
             adminToken: null,
+            managed: null,
             clockOffset: 0,
             busy: false,
             loaded: false
@@ -509,8 +547,14 @@
             }
         }
 
+        const MODE_BTN_IDLE = "px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200";
+        const MODE_BTN_ACTIVE = "px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-brand-600 text-white shadow-md hover:bg-brand-700";
+
         function setMode(mode) {
             AppState.currentMode = mode;
+            document.getElementById('dodgeballForm').classList.toggle('hidden', mode === 'manage');
+            document.getElementById('manage-team-area').classList.toggle('hidden', mode !== 'manage');
+            document.getElementById('btn-manage-team').className = mode === 'manage' ? MODE_BTN_ACTIVE : MODE_BTN_IDLE;
             document.getElementById('create-team-fields').classList.add('hidden');
             document.getElementById('join-team-fields').classList.add('hidden');
             document.getElementById('team-details-section').classList.remove('hidden');
@@ -543,6 +587,9 @@
                 document.getElementById('submitBtn').innerText = "Join Waitlist";
                 document.getElementById('teamName').required = false;
                 document.getElementById('joinTeamCode').required = false;
+            } else if (mode === 'manage') {
+                document.getElementById('teamName').required = false;
+                document.getElementById('joinTeamCode').required = false;
             }
         }
 
@@ -559,15 +606,18 @@
             document.getElementById('btn-join-team').style.display = regOpen ? '' : 'none';
             document.getElementById('btn-free-agent').style.display = wlOpen ? 'block' : 'none';
 
-            // Free agents can still sign up while team registration is closed.
+            // Free agents can still sign up while team registration is closed, and teams can always be managed.
             const formAvailable = regOpen || wlOpen;
             const succeeded = !document.getElementById('success-message').classList.contains('hidden');
             document.getElementById('registration-closed-msg').classList.toggle('hidden', formAvailable);
-            document.getElementById('registration-form-area').classList.toggle('hidden', !formAvailable || succeeded);
+            document.getElementById('registration-form-area').classList.toggle('hidden', succeeded);
 
             if (!AppState.busy) {
-                if (!regOpen && wlOpen && AppState.currentMode !== 'freeplay') setMode('freeplay');
-                else if (regOpen && !wlOpen && AppState.currentMode === 'freeplay') setMode('create');
+                const mode = AppState.currentMode;
+                if (mode === 'manage') { /* always available */ }
+                else if (!formAvailable) setMode('manage');
+                else if (!regOpen && mode !== 'freeplay') setMode('freeplay');
+                else if (regOpen && !wlOpen && mode === 'freeplay') setMode('create');
             }
         }
 
@@ -590,10 +640,11 @@
             div.className = "flex flex-col md:flex-row gap-3 items-start md:items-center bg-slate-50 p-3 rounded border border-slate-200 fade-in";
             div.innerHTML = `
                 <div class="flex-1 w-full"><input type="text" name="playerName[]" placeholder="Player Name" class="w-full text-sm rounded border-slate-300 px-3 py-2 focus:ring-brand-500 focus:border-brand-500"></div>
-                <div class="flex-1 w-full"><input type="email" name="playerEmail[]" placeholder="Student Email" class="w-full text-sm rounded border-slate-300 px-3 py-2 focus:ring-brand-500 focus:border-brand-500"></div>
+                <div class="flex-1 w-full"><input type="text" name="playerEmail[]" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Student Email" class="masked-input w-full text-sm rounded border-slate-300 px-3 py-2 focus:ring-brand-500 focus:border-brand-500"></div>
                 <div class="w-full md:w-32"><select name="playerRole[]" class="w-full text-sm rounded border-slate-300 px-3 py-2 focus:ring-brand-500 focus:border-brand-500"><option value="Player">Player</option><option value="Alternate">Alternate</option></select></div>
                 <button type="button" onclick="this.parentElement.remove(); updatePlayerCount();" class="text-red-500 hover:text-red-700 font-bold px-2 py-2 w-full md:w-auto flex justify-center"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg></button>
             `;
+            applyMaskFallback(div);
             container.appendChild(div);
             updatePlayerCount();
         }
@@ -602,20 +653,14 @@
             document.getElementById('player-count-display').innerText = `${document.getElementById('players-container').children.length}/9 Added`;
         }
 
-        function secureField(element, type) {
-            let val = element.value.trim();
-            if(val) {
-                element.nextElementSibling.value = val;
-                element.dataset.real = val;
-                element.type = "password";
-            }
-        }
-
-        function unsecureField(element) {
-            if(element.type === 'password') {
-                element.type = "text";
-                element.value = element.dataset.real || "";
-            }
+        // Browsers without CSS text masking get a password field instead, so the value is still never shown.
+        function applyMaskFallback(root = document) {
+            const supported = window.CSS && (CSS.supports('-webkit-text-security', 'disc') || CSS.supports('text-security', 'disc'));
+            if (supported) return;
+            root.querySelectorAll('.masked-input').forEach(el => {
+                el.type = 'password';
+                el.autocomplete = 'new-password';
+            });
         }
 
         function setBusy(busy, label) {
@@ -648,8 +693,8 @@
                 player: {
                     name: formData.get('captainName'),
                     phone: formData.get('captainPhone'),
-                    email: formData.get('captainEmail_real') || formData.get('captainEmail'),
-                    studentId: formData.get('captainId_real') || formData.get('captainId')
+                    email: formData.get('captainEmail'),
+                    studentId: formData.get('captainId')
                 }
             };
 
@@ -686,35 +731,150 @@
             generateTeamCode();
 
             document.getElementById('success-message').classList.add('hidden');
-
-            const realInputs = document.querySelectorAll('[type="password"]');
-            realInputs.forEach(i => { i.type = "text"; i.dataset.real = ""; });
             renderSettings();
+        }
+
+        // ---------- Manage My Team (team code required; contact info comes back redacted) ----------
+
+        async function lookupManagedTeam(e) {
+            e.preventDefault();
+            const input = document.getElementById('manageTeamCode');
+            const teamCode = input.value.trim().toUpperCase();
+            if (!teamCode) return;
+            const btn = document.getElementById('manageLookupBtn');
+            btn.disabled = true;
+            btn.innerText = 'Searching...';
+            try {
+                const res = await api('teamLookup', { teamCode });
+                AppState.managed = { code: teamCode, team: res.team };
+            } catch (err) {
+                AppState.managed = null;
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Find My Team';
+                renderManagedTeam();
+            }
+        }
+
+        function renderManagedTeam() {
+            const box = document.getElementById('manage-team-result');
+            const managed = AppState.managed;
+            if (!managed) { box.innerHTML = ''; return; }
+            const team = managed.team;
+            const rows = team.players.map(p => `
+                <tr class="border-t border-slate-200">
+                    <td class="px-4 py-3 font-semibold text-slate-800">
+                        ${esc(p.name)}
+                        ${p.role === 'Captain' ? '<span class="ml-1 px-1.5 py-0.5 bg-brand-100 text-brand-700 text-[10px] font-bold rounded uppercase">Captain</span>' : ''}
+                        ${p.role === 'Alternate' ? '<span class="ml-1 px-1.5 py-0.5 bg-slate-200 text-slate-600 text-[10px] font-bold rounded uppercase">Alt</span>' : ''}
+                    </td>
+                    <td class="px-4 py-3 font-mono text-slate-500">${esc(p.email || '—')}</td>
+                    <td class="px-4 py-3 font-mono text-slate-500">${esc(p.studentId || '—')}</td>
+                    <td class="px-4 py-3">${p.confirmed
+                        ? '<span class="text-xs font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded">Registered</span>'
+                        : '<span class="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">Invited</span>'}</td>
+                    <td class="px-4 py-3 text-right">
+                        <button onclick="confirmRemoveTeamPlayer('${esc(p.playerId)}')" class="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition-colors">Remove</button>
+                    </td>
+                </tr>`).join('');
+
+            box.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm fade-in">
+                    <div class="bg-slate-100 px-6 py-4 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3">
+                        <div>
+                            <h3 class="text-xl font-black text-slate-900">${esc(team.name)}</h3>
+                            <div class="text-xs text-slate-500 font-mono mt-0.5">Code: ${esc(team.code)}</div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            ${team.eliminated ? '<span class="text-xs font-bold px-2 py-1 bg-red-100 text-red-700 rounded uppercase">Eliminated</span>' : ''}
+                            <span class="text-sm font-semibold bg-brand-100 text-brand-700 px-3 py-1 rounded-full">${team.players.length}/${team.maxTeamSize} Players</span>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm text-left">
+                            <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+                                <tr><th class="px-4 py-2">Name</th><th class="px-4 py-2">Email</th><th class="px-4 py-2">Student ID</th><th class="px-4 py-2">Status</th><th class="px-4 py-2"></th></tr>
+                            </thead>
+                            <tbody>${rows || '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400 italic">No players on this team.</td></tr>'}</tbody>
+                        </table>
+                    </div>
+                    <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex flex-wrap justify-between items-center gap-3">
+                        <p class="text-xs text-slate-500">Emails and student IDs are hidden for privacy. If the captain is removed, the next teammate becomes captain.</p>
+                        ${team.canDelete
+                            ? '<button onclick="confirmDeleteManagedTeam()" class="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-colors">Delete Team</button>'
+                            : '<span class="text-xs font-semibold text-slate-500">Teams can\'t be deleted once matches have started.</span>'}
+                    </div>
+                </div>`;
+        }
+
+        function confirmRemoveTeamPlayer(playerId) {
+            const managed = AppState.managed;
+            const p = managed && managed.team.players.find(pl => pl.playerId === playerId);
+            if (!p) return;
+            showModal("Remove Player?", `Remove <b>${esc(p.name)}</b> from <b>${esc(managed.team.name)}</b>? They will need to register again to rejoin.`,
+                `<button onclick="removeTeamPlayer('${esc(playerId)}')" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold shadow">Yes, Remove</button>`);
+        }
+
+        async function removeTeamPlayer(playerId) {
+            closeModal();
+            const managed = AppState.managed;
+            if (!managed) return;
+            try {
+                const res = await api('teamRemovePlayer', { teamCode: managed.code, playerId });
+                managed.team = res.team;
+                renderManagedTeam();
+            } catch (err) {
+                // api() already showed the error
+            }
+        }
+
+        function confirmDeleteManagedTeam() {
+            const managed = AppState.managed;
+            if (!managed) return;
+            showModal("Delete Team?", `This permanently deletes <b>${esc(managed.team.name)}</b> and removes all ${managed.team.players.length} player(s) from it. This can't be undone.`,
+                `<button onclick="deleteManagedTeam()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold shadow">Delete Team</button>`);
+        }
+
+        async function deleteManagedTeam() {
+            closeModal();
+            const managed = AppState.managed;
+            if (!managed) return;
+            try {
+                const res = await api('teamDelete', { teamCode: managed.code });
+                AppState.managed = null;
+                document.getElementById('manageTeamCode').value = '';
+                renderManagedTeam();
+                showModal("Team Deleted", esc(res.message));
+            } catch (err) {
+                // api() already showed the error
+            }
         }
 
         // ---------- Bracket ----------
 
-        // Empty placeholder layout shown before the server responds.
+        const LOGO_URL = 'https://i.imgur.com/7AC3kel.png';
+
+        // Empty placeholder layout shown before the server responds. Seeding mirrors computeBracket_ in Code.gs.
         function buildBracketData() {
             const activeTeams = AppState.teams;
             const teamCount = Math.max(2, activeTeams.length);
             const numRounds = Math.ceil(Math.log2(teamCount)) + 1;
 
-            let matches = [];
+            const matches = [];
             for (let r = 0; r < numRounds; r++) {
-                let roundMatches = [];
-                let matchesInRound = (r === numRounds - 1) ? 1 : Math.pow(2, numRounds - r - 2);
+                const roundMatches = [];
+                const matchesInRound = (r === numRounds - 1) ? 1 : Math.pow(2, numRounds - r - 2);
                 for (let m = 0; m < matchesInRound; m++) {
                     roundMatches.push({ round: r, pos: m, team1: null, team2: null, winner: null });
                 }
                 matches.push(roundMatches);
             }
 
-            for (let i = 0; i < activeTeams.length; i++) {
-                let matchIndex = Math.floor(i / 2);
-                let slot = i % 2 === 0 ? 'team1' : 'team2';
-                if (matchIndex < matches[0].length) matches[0][matchIndex][slot] = activeTeams[i];
-            }
+            const first = matches[0];
+            activeTeams.forEach((team, i) => {
+                if (i < first.length) first[i].team1 = team;
+                else if (i < first.length * 2) first[i - first.length].team2 = team;
+            });
             AppState.bracket = matches;
         }
 
@@ -728,12 +888,48 @@
             }
         }
 
+        function roundLabel(r, numRounds) {
+            if (r === numRounds - 1) return "Champion";
+            if (r === numRounds - 2) return "Finals";
+            return "Round " + (r + 1);
+        }
+
+        function subtreeHasTeams(r, m) {
+            const match = AppState.bracket[r] && AppState.bracket[r][m];
+            if (!match) return false;
+            if (match.team1 || match.team2) return true;
+            return r > 0 && (subtreeHasTeams(r - 1, 2 * m) || subtreeHasTeams(r - 1, 2 * m + 1));
+        }
+
+        // An empty slot is "TBD" while the match feeding it still has teams to play; otherwise nobody is coming.
+        function slotPending(r, m, slot) {
+            if (r === 0) return false;
+            const fm = 2 * m + slot - 1;
+            const feeder = AppState.bracket[r - 1][fm];
+            return !!feeder && !feeder.winner && subtreeHasTeams(r - 1, fm);
+        }
+
         function advanceTeam(r, m, teamSlot) {
-            let match = AppState.bracket[r] && AppState.bracket[r][m];
+            const match = AppState.bracket[r] && AppState.bracket[r][m];
             if (!match) return;
-            let winningTeam = teamSlot === 1 ? match.team1 : match.team2;
+            const winningTeam = teamSlot === 1 ? match.team1 : match.team2;
             if (!winningTeam) return;
             adminAction('advanceTeam', { round: r, pos: m, slot: teamSlot });
+        }
+
+        function confirmUndoAdvance(r, m) {
+            const match = AppState.bracket[r] && AppState.bracket[r][m];
+            if (!match || !match.winner) return;
+            const loser = [match.team1, match.team2].find(t => t && t.id !== match.winner.id);
+            const where = r === AppState.bracket.length - 2 ? 'the Champion spot' : roundLabel(r + 1, AppState.bracket.length);
+            showModal("Undo Result?",
+                `Move <b>${esc(match.winner.name)}</b> back out of ${where}${loser ? ` and put <b>${esc(loser.name)}</b> back in the match` : ''}?`,
+                `<button onclick="undoAdvance(${r}, ${m})" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold shadow">Yes, Undo</button>`);
+        }
+
+        function undoAdvance(r, m) {
+            closeModal();
+            adminAction('undoAdvance', { round: r, pos: m });
         }
 
         function renderBracket(canvasId, headersId, isAdmin = false, isProjector = false) {
@@ -744,119 +940,132 @@
 
             if (!AppState.bracket || AppState.bracket.length === 0) buildBracketData();
 
-            let matches = AppState.bracket;
-            let numRounds = matches.length;
+            const matches = AppState.bracket;
+            const numRounds = matches.length;
+            const dark = isProjector || isAdmin;
 
-            headers.className = "flex w-full mb-6 relative";
-            const minBracketWidth = numRounds * 260; // Increased to give match cards breathing room
-            headers.style.minWidth = minBracketWidth + 'px';
+            // Pixel layout: every match is centred between the two matches that feed it.
+            const colW = isProjector ? 320 : 260;
+            const cardW = colW - 56;
+            const matchH = isProjector ? 140 : 110;
+            const champH = isProjector ? 240 : 190;
+            const padY = Math.ceil(champH / 2);
+            const lineColor = dark ? '#475569' : '#cbd5e1';
+            const firstRound = matches[0].length;
+            const totalW = (numRounds - 1) * colW + cardW;
+            const centerY = (r, m) => {
+                if (r === numRounds - 1) r = numRounds - 2; // champion sits level with the final
+                return padY + (m + 0.5) * Math.pow(2, r) * matchH;
+            };
 
-            const colWidth = 100 / numRounds;
+            headers.className = "relative w-full mb-6 h-6";
+            headers.style.width = totalW + 'px';
             for (let r = 0; r < numRounds; r++) {
-                let headerText = "Round " + (r + 1);
-                if (r === numRounds - 2) headerText = "Finals";
-                if (r === numRounds - 1) headerText = "Champion";
-
-                let div = document.createElement('div');
-                div.className = `text-center font-black uppercase tracking-widest text-sm ${isProjector || isAdmin ? 'text-slate-500' : 'text-slate-400'}`;
-                div.style.width = colWidth + '%';
-                div.innerText = headerText;
+                const div = document.createElement('div');
+                div.className = `absolute text-center font-black uppercase tracking-widest ${isProjector ? 'text-lg' : 'text-sm'} ${dark ? 'text-slate-500' : 'text-slate-400'}`;
+                div.style.left = (r * colW) + 'px';
+                div.style.width = cardW + 'px';
+                div.innerText = roundLabel(r, numRounds);
                 headers.appendChild(div);
             }
 
-            canvas.className = "relative w-full min-h-[500px]";
-            canvas.style.minWidth = minBracketWidth + 'px';
-            const matchHeight = 110; // Increased spacing so matches don't squash
+            canvas.className = "relative";
+            canvas.style.width = totalW + 'px';
+            canvas.style.height = (firstRound * matchH + padY * 2) + 'px';
+
+            const line = (left, top, width, height) => {
+                const el = document.createElement('div');
+                el.className = 'absolute';
+                el.style.left = left + 'px';
+                el.style.top = top + 'px';
+                el.style.width = Math.max(width, 2) + 'px';
+                el.style.height = Math.max(height, 2) + 'px';
+                el.style.background = lineColor;
+                canvas.appendChild(el);
+            };
+
+            const rowSize = isProjector ? 'text-lg px-4 py-3' : 'text-sm px-3 py-2';
 
             for (let r = 0; r < numRounds; r++) {
-                let roundMatches = matches[r];
-                let roundWidth = 100 / numRounds;
-                let leftPos = r * roundWidth;
-
-                for (let m = 0; m < roundMatches.length; m++) {
-                    let match = roundMatches[m];
-                    let spacing = Math.pow(2, r) * matchHeight;
-                    let offset = (Math.pow(2, r) - 1) * (matchHeight / 2);
-                    let topPos = offset + (m * spacing);
-
-                    let mDiv = document.createElement('div');
-                    mDiv.className = "absolute p-2 z-10 flex flex-col justify-center transition-all duration-500";
-                    mDiv.style.left = leftPos + '%';
-                    mDiv.style.top = topPos + 'px';
-                    mDiv.style.width = roundWidth + '%';
+                matches[r].forEach((match, m) => {
+                    const y = centerY(r, m);
+                    const mDiv = document.createElement('div');
+                    mDiv.className = "absolute z-10 fade-in";
+                    mDiv.style.left = (r * colW) + 'px';
+                    mDiv.style.top = y + 'px';
+                    mDiv.style.width = cardW + 'px';
+                    mDiv.style.transform = 'translateY(-50%)';
 
                     if (r < numRounds - 1) {
-                        let t1Name = esc(match.team1 ? match.team1.name : (r===0 ? "BYE" : "TBD"));
-                        let t2Name = esc(match.team2 ? match.team2.name : (r===0 ? "BYE" : "TBD"));
+                        const next = matches[r + 1][Math.floor(m / 2)];
+                        const canUndo = isAdmin && match.winner && !(r + 1 < numRounds - 1 && next.winner);
 
-                        let isT1Elim = match.team1 && match.team1.eliminated;
-                        let isT2Elim = match.team2 && match.team2.eliminated;
-
-                        let t1Classes = `px-3 py-2 border-b text-sm font-bold truncate transition-colors `;
-                        let t2Classes = `px-3 py-2 text-sm font-bold truncate transition-colors `;
-
-                        // Clickable styles for Admin
-                        if (isAdmin && match.team1 && !isT1Elim) t1Classes += ` cursor-pointer hover:bg-brand-600 hover:text-white `;
-                        if (isAdmin && match.team2 && !isT2Elim) t2Classes += ` cursor-pointer hover:bg-brand-600 hover:text-white `;
-
-                        if (isT1Elim) t1Classes += ` text-slate-400 line-through bg-slate-100 `;
-                        else if (!isAdmin && !isProjector) t1Classes += ` text-slate-800 `;
-                        else t1Classes += ` text-slate-200 `;
-
-                        if (isT2Elim) t2Classes += ` text-slate-400 line-through bg-slate-100 `;
-                        else if (!isAdmin && !isProjector) t2Classes += ` text-slate-800 `;
-                        else t2Classes += ` text-slate-200 `;
-
-                        // Dark mode overrides
-                        if (isProjector || isAdmin) {
-                            if (isT1Elim) t1Classes += ` !bg-slate-900 !text-slate-600 `;
-                            if (isT2Elim) t2Classes += ` !bg-slate-900 !text-slate-600 `;
-                        }
-
-                        let t1Click = (isAdmin && match.team1 && !isT1Elim) ? `onclick="advanceTeam(${r}, ${m}, 1)"` : ``;
-                        let t2Click = (isAdmin && match.team2 && !isT2Elim) ? `onclick="advanceTeam(${r}, ${m}, 2)"` : ``;
+                        const row = (team, slot) => {
+                            let cls = `${rowSize} font-bold flex items-center justify-between gap-2 transition-colors`;
+                            if (slot === 1) cls += ` border-b ${dark ? 'border-slate-600' : 'border-slate-200'}`;
+                            if (!team) {
+                                const label = slotPending(r, m, slot) ? 'TBD' : 'Unassigned';
+                                return `<div class="${cls} italic font-medium ${dark ? 'text-slate-500' : 'text-slate-400'}">${label}</div>`;
+                            }
+                            const isWinner = match.winner && match.winner.id === team.id;
+                            const lost = !isWinner && (team.eliminated || !!match.winner);
+                            let attrs = '';
+                            let badge = '';
+                            if (isWinner) {
+                                cls += dark ? ' bg-emerald-900/40 text-emerald-300' : ' bg-emerald-50 text-emerald-800';
+                                badge = '<span class="shrink-0">✓</span>';
+                            } else if (lost) {
+                                cls += dark ? ' bg-slate-900 text-slate-600 line-through' : ' bg-slate-100 text-slate-400 line-through';
+                            } else {
+                                cls += dark ? ' text-slate-200' : ' text-slate-800';
+                            }
+                            if (isAdmin && isWinner && canUndo) {
+                                cls += ' cursor-pointer hover:bg-amber-600 hover:text-white';
+                                attrs = `onclick="confirmUndoAdvance(${r}, ${m})" title="Made a mistake? Click to undo this result"`;
+                                badge = '<span class="shrink-0 text-[10px] uppercase tracking-wider opacity-80">✓ Undo</span>';
+                            } else if (isAdmin && !match.winner && !lost) {
+                                if (slotPending(r, m, slot === 1 ? 2 : 1)) {
+                                    attrs = 'title="Waiting on the other match"';
+                                } else {
+                                    cls += ' cursor-pointer hover:bg-brand-600 hover:text-white';
+                                    attrs = `onclick="advanceTeam(${r}, ${m}, ${slot})" title="Click to advance"`;
+                                }
+                            }
+                            return `<div class="${cls}" ${attrs}><span class="truncate">${esc(team.name)}</span>${badge}</div>`;
+                        };
 
                         mDiv.innerHTML = `
-                            <div class="bg-white rounded border shadow-sm flex flex-col w-[90%] overflow-hidden ${(isProjector || isAdmin) ? '!bg-slate-800 !border-slate-600' : 'border-slate-300'}">
-                                <div class="${t1Classes}" ${t1Click} title="Click to advance">${t1Name}</div>
-                                <div class="${t2Classes}" ${t2Click} title="Click to advance">${t2Name}</div>
-                            </div>
-                        `;
+                            <div class="rounded border shadow-sm flex flex-col overflow-hidden ${dark ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-300'}">
+                                ${row(match.team1, 1)}
+                                ${row(match.team2, 2)}
+                            </div>`;
+
+                        // Connector: out of this card, across to the gutter, then over to the next match.
+                        const x1 = r * colW + cardW;
+                        const xMid = x1 + (colW - cardW) / 2;
+                        const y2 = centerY(r + 1, Math.floor(m / 2));
+                        line(x1, y - 1, xMid - x1, 2);
+                        line(xMid - 1, Math.min(y, y2) - 1, 2, Math.abs(y2 - y) + 2);
+                        line(xMid, y2 - 1, (r + 1) * colW - xMid, 2);
                     } else {
-                        let champName = esc(match.team1 ? match.team1.name : "TBD");
+                        const champ = match.team1;
+                        const finalMatch = matches[numRounds - 2][0];
+                        const canUndo = isAdmin && champ && finalMatch && finalMatch.winner;
+                        const attrs = canUndo ? `onclick="confirmUndoAdvance(${numRounds - 2}, 0)" title="Made a mistake? Click to undo the final"` : '';
+                        const logoSize = isProjector ? 'h-32 w-32' : 'h-24 w-24';
                         mDiv.innerHTML = `
-                            <div class="bg-brand-600 rounded-lg shadow-xl border-2 border-brand-400 p-4 w-[90%] text-center flex flex-col items-center justify-center fade-in">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-yellow-300 mb-1" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 011.233.393l1.109 2.118a1 1 0 01-.157 1.258l-1.895 2.052a1 1 0 01-.159 1.135l1.624 3.033a1 1 0 01-1.42 1.272l-4.103-2.463A1 1 0 0110 15H5a1 1 0 01-1-1v-2H2a1 1 0 01-.98-1.196l1.326-6.627A1 1 0 013.313 3.3l1.83.61L8.85 1.4A1 1 0 0110 2z" clip-rule="evenodd" /></svg>
-                                <span class="text-white font-black uppercase text-xl truncate w-full" title="${champName}">${champName}</span>
-                            </div>
-                        `;
+                            <div class="rounded-xl shadow-xl border-2 p-4 text-center flex flex-col items-center justify-center ${champ ? 'bg-brand-600 border-brand-400' : (dark ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-300')} ${canUndo ? 'cursor-pointer admin-clickable' : ''}" ${attrs}>
+                                ${champ
+                                    ? `<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-yellow-300 mb-1" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2l2.39 4.84 5.34.78-3.86 3.77.91 5.32L10 14.2l-4.78 2.51.91-5.32L2.27 7.62l5.34-.78L10 2z"/></svg>`
+                                    : `<img src="${LOGO_URL}" alt="Dodgeball After Dark logo" class="${logoSize} object-contain mb-2 drop-shadow-lg" onerror="this.style.display='none'">`}
+                                <span class="text-[10px] font-black uppercase tracking-[0.3em] ${champ ? 'text-brand-100' : (dark ? 'text-slate-400' : 'text-slate-500')}">Champion</span>
+                                <span class="font-black uppercase ${isProjector ? 'text-2xl' : 'text-xl'} truncate w-full ${champ ? 'text-white' : (dark ? 'text-slate-200' : 'text-slate-800')}" title="${champ ? esc(champ.name) : 'TBD'}">${champ ? esc(champ.name) : 'TBD'}</span>
+                                ${canUndo ? '<span class="mt-1 text-[10px] uppercase tracking-wider text-brand-100">Click to undo</span>' : ''}
+                            </div>`;
                     }
-
-                    if (r < numRounds - 1) {
-                        let lineDiv = document.createElement('div');
-                        let isTopBranch = m % 2 === 0;
-
-                        lineDiv.className = `absolute right-0 w-[10%] border-r-2 ${(isProjector || isAdmin) ? 'border-slate-600' : 'border-slate-300'}`;
-                        if(isTopBranch) {
-                            lineDiv.classList.add('border-t-2', 'rounded-tr-lg');
-                            lineDiv.style.top = '50%';
-                            lineDiv.style.height = (spacing / 2) + 'px';
-                        } else {
-                            lineDiv.classList.add('border-b-2', 'rounded-br-lg');
-                            lineDiv.style.bottom = '50%';
-                            lineDiv.style.height = (spacing / 2) + 'px';
-                        }
-                        mDiv.appendChild(lineDiv);
-
-                        let straightLine = document.createElement('div');
-                        straightLine.className = `absolute top-1/2 -right-[10%] w-[10%] border-t-2 ${(isProjector || isAdmin) ? 'border-slate-600' : 'border-slate-300'}`;
-                        mDiv.appendChild(straightLine);
-                    }
-
                     canvas.appendChild(mDiv);
-                }
+                });
             }
-            canvas.style.height = (matches[0].length * matchHeight + 100) + 'px';
         }
 
         // ---------- Admin ----------
@@ -951,58 +1160,132 @@
         function renderAdminDashboard() {
             document.getElementById('status-teamcount').innerText = AppState.teams.length;
             document.getElementById('admin-waitlist-count').innerText = AppState.waitlistCount;
-
-            const rosterContainer = document.getElementById('admin-roster-cards');
-            rosterContainer.innerHTML = '';
-
-            AppState.teams.forEach(team => {
-                let playersHtml = team.players.map(p => `
-                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between py-3 border-b border-slate-700/50 last:border-0 group gap-2">
-                        <div class="w-full sm:w-auto">
-                            <div class="text-base font-bold text-slate-200 flex flex-wrap items-center gap-2 leading-tight">
-                                <span class="break-words whitespace-normal">${esc(p.name)}</span>
-                                ${p.role === 'Captain' ? `<span class="px-1.5 py-0.5 bg-brand-500/20 text-brand-400 text-[10px] rounded uppercase shrink-0">C</span>` : ''}
-                                ${p.role === 'Alternate' ? `<span class="px-1.5 py-0.5 bg-slate-600/40 text-slate-300 text-[10px] rounded uppercase shrink-0">Alt</span>` : ''}
-                            </div>
-                            <div class="text-xs text-slate-400 mt-0.5 break-words whitespace-normal">${esc(p.email || 'No email')} | ${esc(p.studentId || 'No ID')}</div>
-                        </div>
-                        <div class="flex items-center gap-2 self-end sm:self-center">
-                            <button onclick="toggleCheckIn('${esc(p.playerId)}')" class="px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider ${p.checkedIn ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700 hover:bg-slate-600 text-slate-300 border border-slate-600'} transition-colors flex items-center gap-1 shadow-sm" title="Toggle Check-in">
-                                ${p.checkedIn ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg> IN' : 'CHECK IN'}
-                            </button>
-                        </div>
-                    </div>
-                `).join('');
-
-                if (team.players.length === 0) playersHtml = `<div class="text-slate-500 text-sm italic py-2">No players added yet.</div>`;
-
-                let card = document.createElement('div');
-                card.className = `bg-slate-800 rounded-xl border ${team.eliminated ? 'border-red-500/50 opacity-75' : 'border-slate-700'} shadow-lg p-5 flex flex-col min-h-[300px]`;
-                card.innerHTML = `
-                    <div class="flex justify-between items-start mb-4 pb-3 border-b border-slate-700">
-                        <div class="flex-1">
-                            <h3 class="text-lg font-black text-white leading-tight ${team.eliminated ? 'line-through text-slate-400' : ''}">${esc(team.name)}</h3>
-                            <div class="text-xs text-slate-400 font-mono mt-1">Code: ${esc(team.code)}</div>
-                        </div>
-                        <div class="flex flex-col items-end gap-1">
-                            <span class="text-xs font-bold px-2 py-1 bg-slate-700 text-slate-300 rounded">${team.players.length} Players</span>
-                            ${team.eliminated ? `<span class="text-[10px] font-bold px-2 py-0.5 bg-red-500/20 text-red-400 rounded uppercase">Eliminated</span>` : ''}
-                        </div>
-                    </div>
-                    <div class="flex-1 space-y-2 overflow-y-auto pr-1 mb-4">
-                        ${playersHtml}
-                    </div>
-                    <div class="flex gap-2 mt-auto pt-3 border-t border-slate-700/50 justify-between items-center">
-                        <div class="flex gap-2">
-                            <button onclick="checkInTeam('${esc(team.id)}')" title="Check In All" class="text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40 border border-emerald-600/30 rounded transition-colors shadow-sm">Check In All</button>
-                            <button onclick="resetTeamCheckIn('${esc(team.id)}')" title="Reset Check-ins for this team" class="text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 border border-slate-600 rounded transition-colors shadow-sm">Reset</button>
-                        </div>
-                        <button onclick="adminAddPlayerModal('${esc(team.id)}')" title="Manually add player to team" class="text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded transition-colors shadow-sm border border-brand-500">+ Player</button>
-                    </div>
-                `;
-                rosterContainer.appendChild(card);
-            });
+            renderRosterTable();
             renderTimers();
+        }
+
+        // Where a team currently stands in the bracket.
+        function teamStage(team) {
+            if (team.eliminated) return { text: 'Eliminated', cls: 'bg-red-500/20 text-red-400' };
+            const numRounds = AppState.bracket.length;
+            let stage = -1;
+            AppState.bracket.forEach((round, r) => round.forEach(mt => {
+                if ((mt.team1 && mt.team1.id === team.id) || (mt.team2 && mt.team2.id === team.id)) stage = Math.max(stage, r);
+            }));
+            if (stage < 0) return { text: 'Not in bracket', cls: 'bg-slate-700 text-slate-400' };
+            if (stage === numRounds - 1) return { text: 'Champion', cls: 'bg-amber-500/20 text-amber-300' };
+            return { text: roundLabel(stage, numRounds), cls: 'bg-blue-500/20 text-blue-300' };
+        }
+
+        const ROLE_ORDER = { Captain: 0, Player: 1, Alternate: 2 };
+
+        function sortPlayers(players) {
+            return [...players].sort((a, b) => (ROLE_ORDER[a.role] ?? 1) - (ROLE_ORDER[b.role] ?? 1) || a.name.localeCompare(b.name));
+        }
+
+        function rosterPlayerRow(p, { checkIn = true } = {}) {
+            const roleCls = p.role === 'Captain' ? 'bg-brand-500/20 text-brand-400' : p.role === 'Alternate' ? 'bg-slate-600/40 text-slate-300' : 'bg-slate-700/60 text-slate-400';
+            const checkBtn = checkIn
+                ? `<button onclick="toggleCheckIn('${esc(p.playerId)}')" title="Toggle check-in" class="w-24 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider transition-colors ${p.checkedIn ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-700 hover:bg-slate-600 text-slate-300 border border-slate-600'}">${p.checkedIn ? '✓ In' : 'Check In'}</button>`
+                : '<span class="text-slate-600">—</span>';
+            return `
+                <tr class="border-t border-slate-800 hover:bg-slate-800/40">
+                    <td class="px-4 py-2.5 font-semibold text-slate-100 whitespace-nowrap">${esc(p.name)}</td>
+                    <td class="px-4 py-2.5"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${roleCls}">${esc(p.role)}</span></td>
+                    <td class="px-4 py-2.5 text-slate-300 font-mono text-xs">${esc(p.email || '—')}</td>
+                    <td class="px-4 py-2.5 text-slate-300 font-mono text-xs">${esc(p.studentId || '—')}</td>
+                    <td class="px-4 py-2.5 text-slate-400 font-mono text-xs whitespace-nowrap">${esc(p.phone || '—')}</td>
+                    <td class="px-4 py-2.5 text-center">${checkBtn}</td>
+                    <td class="px-4 py-2.5 text-right">
+                        <button onclick="confirmRemovePlayer('${esc(p.playerId)}')" title="Remove player" class="px-2 py-1 text-xs font-bold text-red-400 hover:text-white hover:bg-red-600 rounded transition-colors">✕</button>
+                    </td>
+                </tr>`;
+        }
+
+        function renderRosterTable() {
+            const body = document.getElementById('admin-roster-table');
+            if (!body) return;
+            const query = (document.getElementById('roster-search').value || '').trim().toLowerCase();
+            const matches = p => !query || [p.name, p.email, p.studentId, p.phone].some(v => String(v || '').toLowerCase().includes(query));
+
+            const teams = [...AppState.teams].sort((a, b) => a.name.localeCompare(b.name));
+            let html = '';
+            let totalPlayers = 0, totalIn = 0;
+
+            teams.forEach(team => {
+                const checkedIn = team.players.filter(p => p.checkedIn).length;
+                totalPlayers += team.players.length;
+                totalIn += checkedIn;
+                const teamHit = !query || team.name.toLowerCase().includes(query) || String(team.code).toLowerCase().includes(query);
+                const shown = teamHit ? team.players : team.players.filter(matches);
+                if (!teamHit && shown.length === 0) return;
+
+                const stage = teamStage(team);
+                const allIn = team.players.length > 0 && checkedIn === team.players.length;
+                html += `
+                    <tr class="bg-slate-800 border-t-2 border-slate-600">
+                        <td colspan="7" class="px-4 py-3">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div class="flex flex-wrap items-center gap-3">
+                                    <span class="text-base font-black ${team.eliminated ? 'line-through text-slate-500' : 'text-white'}">${esc(team.name)}</span>
+                                    <span class="text-xs font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded">Code: ${esc(team.code)}</span>
+                                    <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded ${stage.cls}">${esc(stage.text)}</span>
+                                    <span class="text-xs text-slate-400">${team.players.length} player${team.players.length === 1 ? '' : 's'}</span>
+                                    <span class="text-xs font-bold ${allIn ? 'text-emerald-400' : 'text-slate-400'}">${checkedIn}/${team.players.length} checked in</span>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button onclick="checkInTeam('${esc(team.id)}')" class="text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40 border border-emerald-600/30 rounded transition-colors">Check In All</button>
+                                    <button onclick="resetTeamCheckIn('${esc(team.id)}')" class="text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 border border-slate-600 rounded transition-colors">Reset Check-In</button>
+                                    <button onclick="adminAddPlayerModal('${esc(team.id)}')" class="text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded transition-colors border border-brand-500">+ Player</button>
+                                    <button onclick="confirmDeleteTeam('${esc(team.id)}')" class="text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 bg-slate-900 hover:bg-red-600 text-red-400 hover:text-white border border-red-900 rounded transition-colors">Delete Team</button>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>`;
+                html += shown.length
+                    ? sortPlayers(shown).map(p => rosterPlayerRow(p)).join('')
+                    : `<tr class="border-t border-slate-800"><td colspan="7" class="px-4 py-3 text-slate-500 italic">No players added yet.</td></tr>`;
+            });
+
+            const waiting = AppState.waitlist.filter(matches);
+            if (waiting.length) {
+                html += `
+                    <tr class="bg-amber-900/20 border-t-2 border-amber-800/60">
+                        <td colspan="7" class="px-4 py-3 text-base font-black text-amber-400">Waitlist (Free Agents) <span class="text-xs font-bold text-amber-500/80 ml-2">${waiting.length} waiting</span></td>
+                    </tr>`;
+                html += waiting.map(p => rosterPlayerRow(p, { checkIn: false })).join('');
+            }
+
+            body.innerHTML = html || `<tr><td colspan="7" class="px-4 py-10 text-center text-slate-500 italic">${query ? 'No matches.' : 'No teams registered yet.'}</td></tr>`;
+            document.getElementById('admin-roster-summary').innerHTML = `
+                <span class="px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300">${AppState.teams.length} teams</span>
+                <span class="px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300">${totalPlayers} rostered players</span>
+                <span class="px-3 py-1 rounded-full bg-emerald-900/30 border border-emerald-800 text-emerald-400">${totalIn} checked in</span>
+                <span class="px-3 py-1 rounded-full bg-amber-900/30 border border-amber-800 text-amber-400">${AppState.waitlist.length} on waitlist</span>
+                <span class="px-3 py-1 text-slate-500 font-medium">Advancing a team resets its check-ins so players can check in again for the next round.</span>`;
+        }
+
+        function findAnyPlayer(playerId) {
+            for (const team of AppState.teams) {
+                const p = team.players.find(pl => pl.playerId === playerId);
+                if (p) return { player: p, team };
+            }
+            const p = AppState.waitlist.find(pl => pl.playerId === playerId);
+            return p ? { player: p, team: null } : null;
+        }
+
+        function confirmRemovePlayer(playerId) {
+            const found = findAnyPlayer(playerId);
+            if (!found) return;
+            showModal("Remove Player?", `Remove <b>${esc(found.player.name)}</b> from ${found.team ? `<b>${esc(found.team.name)}</b>` : 'the waitlist'}?`,
+                `<button onclick="closeModal(); adminAction('removePlayer', { playerId: '${esc(playerId)}' })" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold shadow">Yes, Remove</button>`);
+        }
+
+        function confirmDeleteTeam(teamId) {
+            const team = teamById(teamId);
+            if (!team) return;
+            showModal("Delete Team?", `Permanently delete <b>${esc(team.name)}</b> and its ${team.players.length} player(s)? This can't be undone.`,
+                `<button onclick="closeModal(); adminAction('deleteTeam', { teamId: '${esc(teamId)}' })" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold shadow">Delete Team</button>`);
         }
 
         function findPlayer(playerId) {
@@ -1190,7 +1473,15 @@
             }
         }
 
+        // The admin's "Launch Projector" opens a separate tab; that tab shows the projector view via #projector.
         function openProjectorMode() {
+            const url = location.href.split('#')[0] + '#projector';
+            const win = window.open(url, '_blank');
+            if (!win) showModal("Pop-up Blocked", "Your browser blocked the projector tab. Allow pop-ups for this site, or open this link in a new tab:<br><a class=\"text-brand-600 underline break-all\" href=\"" + esc(url) + "\" target=\"_blank\">" + esc(url) + "</a>");
+        }
+
+        function enterProjectorMode() {
+            document.title = 'Projector | Dodgeball After Dark';
             document.getElementById('app-wrapper').classList.add('hidden');
             document.getElementById('view-projection').classList.remove('hidden');
             document.body.classList.remove('bg-slate-50', 'py-10');
@@ -1201,7 +1492,17 @@
             loadState();
         }
 
+        function toggleFullscreen() {
+            if (document.fullscreenElement) document.exitFullscreen();
+            else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+        }
+
         function closeProjectorMode() {
+            if (location.hash === '#projector') {
+                window.close(); // works when this tab was opened by Launch Projector
+                history.replaceState(null, '', location.pathname + location.search);
+            }
+            document.title = 'Dodgeball After Dark | Admin & Registration';
             document.getElementById('view-projection').classList.add('hidden');
             document.getElementById('app-wrapper').classList.remove('hidden');
             document.body.classList.add('bg-slate-50', 'py-10');
@@ -1216,6 +1517,7 @@
         }
 
         function init() {
+            applyMaskFallback();
             generateTeamCode();
             addPlayerField(); addPlayerField();
             try { AppState.adminToken = sessionStorage.getItem('dbAdminToken'); } catch (err) {}
@@ -1229,6 +1531,7 @@
                 return;
             }
 
+            if (location.hash === '#projector') enterProjectorMode();
             loadState();
             setInterval(tickTimers, 1000);
             setInterval(() => { if (!document.hidden) loadState(); }, POLL_MS);
