@@ -304,10 +304,14 @@
                                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 gap-4">
                                     <div>
                                         <h3 class="text-lg font-bold text-slate-900">Bracket</h3>
-                                        <p class="text-sm text-slate-500 mt-1">Click a team to advance it and eliminate its opponent. Made a mistake? Click the winner (✓) to undo.</p>
+                                        <p id="bracket-help" class="text-sm text-slate-500 mt-1">Click a team to advance it and eliminate its opponent. Made a mistake? Click the winner (✓) to undo.</p>
                                     </div>
-                                    <button onclick="confirmResetBracket()" class="px-4 py-2 bg-white hover:bg-red-50 border border-slate-300 hover:border-red-300 text-slate-700 hover:text-red-700 text-sm font-semibold rounded-lg transition-colors shrink-0">Reset Bracket</button>
+                                    <div class="flex gap-2 shrink-0">
+                                        <button onclick="toggleBracketEdit()" id="btn-edit-bracket" class="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg transition-colors">Edit Bracket</button>
+                                        <button onclick="confirmResetBracket()" class="px-4 py-2 bg-white hover:bg-red-50 border border-slate-300 hover:border-red-300 text-slate-700 hover:text-red-700 text-sm font-semibold rounded-lg transition-colors">Reset Bracket</button>
+                                    </div>
                                 </div>
+                                <div id="bracket-edit-notes" class="hidden mb-4 space-y-2"></div>
                                 <div class="overflow-x-auto relative w-full rounded-lg border border-slate-200 bg-slate-50">
                                     <div class="p-6 w-max relative flex flex-col" id="admin-bracket-scroll-area">
                                         <div id="admin-bracket-headers" class="relative h-12 mb-4 w-full"></div>
@@ -395,6 +399,7 @@
             modeChosen: false,
             pendingJoinCode: null,
             share: null,
+            bracketEdit: false,
             clockOffset: 0,
             busy: false,
             loaded: false,
@@ -1040,6 +1045,7 @@
         function updateAllBrackets() {
             renderBracket('bracket-canvas', 'bracket-headers', false, false);
             if (document.getElementById('admin-bracket-canvas')) {
+                renderBracketEditNotes();
                 renderBracket('admin-bracket-canvas', 'admin-bracket-headers', true, false);
             }
             if (!document.getElementById('view-projection').classList.contains('hidden')) {
@@ -1091,6 +1097,78 @@
             adminAction('undoAdvance', { round: r, pos: m });
         }
 
+        // ---------- Manual bracket editing ----------
+
+        // Mirrors app_private.slot_editable: no result in this match, and no winner has moved into this slot.
+        function slotEditable(r, m, slot) {
+            const rounds = AppState.bracket;
+            if (r >= rounds.length - 1) return false;
+            if (rounds[r][m].winner) return false;
+            if (r === 0) return true;
+            const feeder = rounds[r - 1][2 * m + slot - 1];
+            return !(feeder && feeder.winner);
+        }
+
+        function placedTeamIds() {
+            const ids = new Set();
+            AppState.bracket.slice(0, -1).forEach(round => round.forEach(mt => {
+                if (mt.team1) ids.add(mt.team1.id);
+                if (mt.team2) ids.add(mt.team2.id);
+            }));
+            return ids;
+        }
+
+        function slotSelect(r, m, slot, team) {
+            const placed = placedTeamIds();
+            const options = AppState.teams
+                .filter(t => !t.eliminated)
+                .slice()
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map(t => `<option value="${esc(t.id)}" ${team && team.id === t.id ? 'selected' : ''}>${esc(t.name)}${placed.has(t.id) ? '' : ' (not in bracket)'}</option>`)
+                .join('');
+            return `<select onchange="setBracketSlot(${r}, ${m}, ${slot}, this.value)" class="w-full text-sm font-semibold rounded border border-amber-300 bg-white px-2 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                <option value="" ${team ? '' : 'selected'}>— Empty —</option>${options}</select>`;
+        }
+
+        async function setBracketSlot(r, m, slot, teamId) {
+            await adminAction('setBracketSlot', { round: r, pos: m, slot, teamId });
+        }
+
+        function toggleBracketEdit() {
+            AppState.bracketEdit = !AppState.bracketEdit;
+            renderBracketEditNotes();
+            updateAllBrackets();
+        }
+
+        function renderBracketEditNotes() {
+            const btn = document.getElementById('btn-edit-bracket');
+            const notes = document.getElementById('bracket-edit-notes');
+            const help = document.getElementById('bracket-help');
+            if (!btn || !notes) return;
+            const editing = AppState.bracketEdit;
+            btn.innerText = editing ? 'Done Editing' : 'Edit Bracket';
+            btn.className = editing
+                ? 'px-4 py-2 bg-brand-600 hover:bg-brand-700 border border-brand-600 text-white text-sm font-semibold rounded-lg transition-colors'
+                : 'px-4 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg transition-colors';
+            help.innerText = editing
+                ? 'Pick a team for any open spot. Choosing a team that is already in another open spot swaps the two. Spots marked 🔒 are decided: undo the result first to change them.'
+                : 'Click a team to advance it and eliminate its opponent. Made a mistake? Click the winner (✓) to undo.';
+
+            const parts = [];
+            if (AppState.settings.bracketManual) {
+                parts.push(`<div class="px-4 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-600">This bracket was arranged by hand, so new teams aren't added to it automatically. Reset the bracket to go back to automatic arranging.</div>`);
+            }
+            if (editing) {
+                const placed = placedTeamIds();
+                const missing = AppState.teams.filter(t => !t.eliminated && !placed.has(t.id));
+                if (missing.length) {
+                    parts.push(`<div class="px-4 py-2.5 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900"><b>Not in the bracket:</b> ${missing.map(t => esc(t.name)).join(', ')}</div>`);
+                }
+            }
+            notes.innerHTML = parts.join('');
+            notes.classList.toggle('hidden', parts.length === 0);
+        }
+
         function renderBracket(canvasId, headersId, isAdmin = false, isProjector = false) {
             const canvas = document.getElementById(canvasId);
             const headers = document.getElementById(headersId);
@@ -1099,8 +1177,10 @@
             if (!AppState.bracket || AppState.bracket.length === 0) buildBracketData();
 
             // The state is re-polled every few seconds; only rebuild when something visible changed, so the bracket doesn't flicker.
-            const signature = JSON.stringify(AppState.bracket.map(round => round.map(mt =>
-                [mt.team1, mt.team2, mt.winner].map(t => t ? [t.id, t.name, t.eliminated] : null))));
+            const editing = isAdmin && AppState.bracketEdit;
+            const signature = JSON.stringify([editing, editing ? AppState.teams.map(t => [t.id, t.name, t.eliminated]) : null,
+                AppState.bracket.map(round => round.map(mt =>
+                [mt.team1, mt.team2, mt.winner].map(t => t ? [t.id, t.name, t.eliminated] : null)))]);
             if (canvas.dataset.signature === signature && canvas.childElementCount) return;
             canvas.dataset.signature = signature;
             canvas.innerHTML = ''; headers.innerHTML = '';
@@ -1169,6 +1249,13 @@
                         const row = (team, slot) => {
                             let cls = `${rowSize} font-bold flex items-center justify-between gap-2 transition-colors`;
                             if (slot === 1) cls += ` border-b ${dark ? 'border-slate-600' : 'border-slate-200'}`;
+                            if (editing && slotEditable(r, m, slot)) {
+                                return `<div class="${slot === 1 ? 'border-b border-slate-200' : ''} p-1 bg-amber-50">${slotSelect(r, m, slot, team)}</div>`;
+                            }
+                            if (editing) {
+                                return `<div class="${cls} ${team ? 'text-slate-500' : 'italic font-medium text-slate-400'} bg-slate-50" title="Locked: undo the result first to change this">`
+                                    + `<span class="truncate">${team ? esc(team.name) : (slotPending(r, m, slot) ? 'TBD' : 'Unassigned')}</span><span class="shrink-0 text-xs">🔒</span></div>`;
+                            }
                             if (!team) {
                                 const label = slotPending(r, m, slot) ? 'TBD' : 'Unassigned';
                                 return `<div class="${cls} italic font-medium ${dark ? 'text-slate-500' : 'text-slate-400'}">${label}</div>`;
@@ -1309,7 +1396,7 @@
         }
 
         function confirmResetBracket() {
-            showModal("Reset Bracket?", "Are you sure you want to reset the entire bracket? This will remove all match progress and un-eliminate all teams.",
+            showModal("Reset Bracket?", "Are you sure you want to reset the entire bracket? This will remove all match progress, un-eliminate all teams and lay the bracket out again automatically in sign-up order.",
             `<button onclick="resetBracket()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold shadow">Yes, Reset</button>`);
         }
 

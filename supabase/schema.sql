@@ -62,6 +62,8 @@ create table if not exists app_private.settings (
   max_team_size      int not null default 10 check (max_team_size between 1 and 50),
   waitlist_team_size int not null default 6  check (waitlist_team_size between 1 and 50)
 );
+-- true once an admin arranges the bracket by hand: it then stops following sign-ups until a reset.
+alter table app_private.settings add column if not exists bracket_manual boolean not null default false;
 insert into app_private.settings default values on conflict do nothing;
 
 create table if not exists app_private.teams (
@@ -343,11 +345,13 @@ begin
   update app_private.matches m set team2_id = o.id from ordered o where m.round = 0 and o.i >= first_count and o.i < 2 * first_count and m.pos = o.i - first_count;
 end $$;
 
-/** Keep the layout in step with the teams until the first result is recorded. */
+/** Keep the layout in step with the teams until the first result is recorded or an admin arranges it by hand. */
 create or replace function app_private.sync_bracket() returns void
 language plpgsql as $$
 begin
-  if not app_private.bracket_started() then perform app_private.rebuild_bracket(); end if;
+  if not app_private.bracket_started() and not (app_private.settings_row()).bracket_manual then
+    perform app_private.rebuild_bracket();
+  end if;
 end $$;
 
 create or replace function app_private.subtree_has_teams(r int, m int) returns boolean
@@ -422,7 +426,7 @@ language sql stable as $$
     'serverTime', app_private.now_ms(),
     'settings', (select jsonb_build_object(
         'registrationOpen', s.registration_open, 'waitlistOpen', s.waitlist_open,
-        'maxTeamSize', s.max_team_size, 'waitlistTeamSize', s.waitlist_team_size)
+        'maxTeamSize', s.max_team_size, 'waitlistTeamSize', s.waitlist_team_size, 'bracketManual', s.bracket_manual)
       from app_private.settings s where s.id = 1),
     'teams', coalesce((
       select jsonb_agg(
@@ -1096,6 +1100,7 @@ create or replace function app_private.reset_bracket(p jsonb) returns jsonb
 language plpgsql as $$
 begin
   update app_private.teams set eliminated = false, updated_at = now() where eliminated;
+  update app_private.settings set bracket_manual = false where id = 1;
   delete from app_private.matches where true;
   delete from app_private.checkin_snapshots where true;
   perform app_private.rebuild_bracket();
@@ -1213,6 +1218,8 @@ declare
   v_loser text;
   loser_name text := 'Unassigned';
   was_in text[];
+  nxt app_private.matches;
+  occupant text;
 begin
   select * into mt from app_private.matches where round = r and pos = m for update;
   if not found or r >= num - 1 or slot not in (1, 2) then perform app_private.fail('Invalid match.'); end if;
@@ -1229,6 +1236,13 @@ begin
   select * into winner from app_private.teams where id = v_winner;
   if not found then perform app_private.fail('That team no longer exists.'); end if;
   if winner.eliminated then perform app_private.fail('"' || winner.name || '" has already been eliminated.'); end if;
+
+  select * into nxt from app_private.matches where round = r + 1 and pos = m / 2;
+  occupant := case when m % 2 = 0 then nxt.team1_id else nxt.team2_id end;
+  if occupant is not null and occupant <> v_winner then
+    perform app_private.fail('"' || (select name from app_private.teams where id = occupant) || '" was placed in the spot this winner moves into. '
+      || 'Use Edit bracket to clear that spot first.');
+  end if;
 
   update app_private.matches set winner_id = v_winner, updated_at = now() where round = r and pos = m;
   if v_loser is not null then
@@ -1294,8 +1308,73 @@ begin
     delete from app_private.checkin_snapshots where match_key = k;
   end if;
 
-  if not app_private.bracket_started() then perform app_private.rebuild_bracket(); end if;
+  perform app_private.sync_bracket();
   perform app_private.log('bracket:undo', app_private.bracket_label(r, num) || ' match ' || (m + 1) || ': result for ' || coalesce(w_name, w_id) || ' undone');
+  return '{}'::jsonb;
+end $$;
+
+/** A slot an admin may change by hand: its match has no result and no winner has moved into that slot. */
+drop function if exists app_private.slot_editable(int, int);
+create or replace function app_private.slot_editable(r int, m int, slot int) returns boolean
+language sql stable as $$
+  select r < app_private.num_rounds() - 1
+    and exists (select 1 from app_private.matches where round = r and pos = m and winner_id is null)
+    and (r = 0 or not exists (select 1 from app_private.matches where round = r - 1 and pos = 2 * m + slot - 1 and winner_id is not null));
+$$;
+
+/**
+ * Puts a team (or nobody) in one bracket slot. If that team is already in another open slot,
+ * the two swap, so teams can be rearranged without ever appearing twice.
+ */
+create or replace function app_private.set_bracket_slot(p jsonb) returns jsonb
+language plpgsql as $$
+declare
+  r int := (p->>'round')::int;
+  m int := (p->>'pos')::int;
+  slot int := (p->>'slot')::int;
+  v_team text := nullif(p->>'teamId', '');
+  num int := app_private.num_rounds();
+  mt app_private.matches;
+  t app_private.teams;
+  old_team text;
+  other record;
+  swapped boolean := false;
+begin
+  select * into mt from app_private.matches where round = r and pos = m for update;
+  if not found or r >= num - 1 or slot not in (1, 2) then perform app_private.fail('Invalid bracket spot.'); end if;
+  if mt.winner_id is not null then perform app_private.fail('That match already has a result. Undo it first to change who plays.'); end if;
+  if not app_private.slot_editable(r, m, slot) then
+    perform app_private.fail('This spot goes to the winner of an earlier match. Undo that result first to change it.');
+  end if;
+  old_team := case when slot = 1 then mt.team1_id else mt.team2_id end;
+  if v_team is not distinct from old_team then return '{}'::jsonb; end if;
+
+  if v_team is not null then
+    select * into t from app_private.teams where id = v_team;
+    if not found then perform app_private.fail('That team no longer exists.'); end if;
+    if t.eliminated then perform app_private.fail('"' || t.name || '" has been eliminated. Undo the match it lost to bring it back.'); end if;
+    -- Where the team is now (its furthest spot), if anywhere.
+    select x.round, x.pos, x.s into other from (
+      select round, pos, 1 as s from app_private.matches where team1_id = v_team and round < num - 1
+      union all select round, pos, 2 from app_private.matches where team2_id = v_team and round < num - 1
+    ) x where not (x.round = r and x.pos = m and x.s = slot) order by x.round desc limit 1;
+    if found then
+      if not app_private.slot_editable(other.round, other.pos, other.s) then
+        perform app_private.fail('"' || t.name || '" is already playing in ' || app_private.bracket_label(other.round, num)
+          || '. Undo its results first to move it.');
+      end if;
+      if other.s = 1 then update app_private.matches set team1_id = old_team, updated_at = now() where round = other.round and pos = other.pos;
+      else update app_private.matches set team2_id = old_team, updated_at = now() where round = other.round and pos = other.pos; end if;
+      swapped := true;
+    end if;
+  end if;
+
+  if slot = 1 then update app_private.matches set team1_id = v_team, updated_at = now() where round = r and pos = m;
+  else update app_private.matches set team2_id = v_team, updated_at = now() where round = r and pos = m; end if;
+  update app_private.settings set bracket_manual = true where id = 1;
+  perform app_private.log('bracket:edit', app_private.bracket_label(r, num) || ' match ' || (m + 1) || ' slot ' || slot || ': '
+    || coalesce((select name from app_private.teams where id = old_team), 'empty') || ' -> ' || coalesce(t.name, 'empty')
+    || case when swapped then ' (swapped)' else '' end);
   return '{}'::jsonb;
 end $$;
 
@@ -1346,7 +1425,7 @@ declare
   is_admin boolean;
   result jsonb;
   admin_actions constant text[] := array['setSetting', 'processWaitlist', 'fillTeam', 'resetBracket', 'addTeam', 'renameTeam', 'addPlayer',
-    'removePlayer', 'deleteTeam', 'toggleCheckIn', 'setTeamCheckIn', 'advanceTeam', 'undoAdvance', 'timer'];
+    'removePlayer', 'deleteTeam', 'toggleCheckIn', 'setTeamCheckIn', 'advanceTeam', 'undoAdvance', 'setBracketSlot', 'timer'];
 begin
   payload := coalesce(payload, '{}'::jsonb);
   is_admin := app_private.check_admin(token);
@@ -1380,6 +1459,7 @@ begin
     when 'setTeamCheckIn'   then result := app_private.set_team_check_in(payload);
     when 'advanceTeam'      then result := app_private.advance_team(payload);
     when 'undoAdvance'      then result := app_private.undo_advance(payload);
+    when 'setBracketSlot'   then result := app_private.set_bracket_slot(payload);
     when 'timer'            then result := app_private.timer_action(payload);
     else perform app_private.fail('Unknown action: ' || coalesce(action, ''));
   end case;

@@ -97,6 +97,17 @@ Plan limits worth knowing for a 200–500 person event:
 - **Free projects pause after a week with no activity.** Open the dashboard or the site in the days
   before the event (or use Pro) so it isn't paused on game night.
 
+## Editing the bracket
+
+The bracket lays itself out in sign-up order and follows new teams until the first result is recorded.
+To arrange it yourself, click **Edit Bracket** on the admin Overview tab. Every open spot becomes a
+dropdown. Picking a team that's already in another open spot swaps the two, and teams that aren't in
+the bracket yet (say, ones that signed up after play started) are marked "not in bracket" so you can
+drop them into an empty spot. Spots that are already decided are locked until you undo that result.
+
+Once you've edited it by hand, new teams are no longer added automatically. **Reset Bracket** clears
+all results and goes back to the automatic layout.
+
 ## Looking at or editing data by hand
 
 Supabase ▸ **Table Editor**, then switch the schema dropdown from `public` to `app_private`:
