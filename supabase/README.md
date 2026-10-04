@@ -21,6 +21,40 @@ That's it. `SUPABASE_URL` and `SUPABASE_KEY` (publishable) are already set near 
 
 > **Never put the secret key (`sb_secret_…`) in `index.html` or this repo.** The site doesn't need it.
 
+## Confirmation emails (Brevo)
+
+When someone signs up, they get an email with what they signed up for:
+
+- **New team:** the captain gets the team name, the team code, the share link and how to use "Manage
+  My Team". Teammates the captain listed by email get an invite with the code to confirm their spot.
+- **Joining a team:** the player gets the team name, code and share link.
+- **Waitlist:** the player gets their place in line.
+
+The database sends them itself through Supabase's `pg_net` extension, using the same Brevo account as
+Commuter Life. There's no edge function to deploy. An email is only sent after the signup is saved,
+so a failed signup never sends one, and if Brevo is down or not set up, signups still go through.
+
+To turn it on, run this once in a new SQL query, using the Brevo API key (`xkeysib-…`) and the
+address of the sign-up page:
+
+```sql
+select app_private.configure_email('xkeysib-…', 'https://your-site/dodgeball/');
+```
+
+Emails come from `noreply@cabgcu.com` ("Dodgeball After Dark"). That sender has to be verified in
+Brevo. It already is if Commuter Life's emails work. To change it, edit the one row in
+`app_private.email_config`. To turn emails off, run `select app_private.configure_email(null);`.
+
+To see whether emails went out, look at the last few Brevo responses (pg_net keeps them for 6 hours):
+
+```sql
+select created, status_code, content from net._http_response order by created desc limit 20;
+```
+
+Problems queuing an email are logged in `event_log` as `email:error`.
+
+> The key lives only in `app_private.email_config`, which the site can't read. Never put it in `index.html`.
+
 ## How it's secured
 
 - All data lives in the `app_private` schema. The public API doesn't expose that schema, so the site
@@ -58,6 +92,7 @@ Supabase ▸ **Table Editor**, then switch the schema dropdown from `public` to 
 | `matches` | bracket slots and winners (`round` and `pos` start at 0) |
 | `settings` | registration / waitlist open, team sizes |
 | `timers` | the three court clocks |
+| `email_config` | Brevo key, sender and site link for confirmation emails |
 | `event_log` | everything that happened, including errors |
 
 Rosters can be exported as CSV from the Table Editor.
