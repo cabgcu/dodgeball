@@ -77,6 +77,11 @@ Problems queuing an email are logged in `event_log` as `email:error`.
 - Writes run one at a time behind a lock. A team can never go over the size limit, and an email or
   student ID can't be registered twice, even when hundreds of people submit at once.
 - After 10 wrong admin passwords, logins pause for 10 minutes.
+- Team names with profanity, slurs or sexual terms are refused at sign-up (`app_private.is_inappropriate`,
+  which also catches l33t and spaced-out spellings). Admins can rename any team from the dashboard,
+  and can add words to the lists in that function if something slips through.
+- Every player needs a student ID, including teammates a captain lists on the create form. Those
+  listed players show as unconfirmed until they sign up themselves with the team code.
 
 ## Live updates
 
@@ -91,6 +96,17 @@ Plan limits worth knowing for a 200–500 person event:
   back to the 15-second refresh, so nothing breaks.
 - **Free projects pause after a week with no activity.** Open the dashboard or the site in the days
   before the event (or use Pro) so it isn't paused on game night.
+
+## Editing the bracket
+
+The bracket lays itself out in sign-up order and follows new teams until the first result is recorded.
+To arrange it yourself, click **Edit Bracket** on the admin Overview tab. Every open spot becomes a
+dropdown. Picking a team that's already in another open spot swaps the two, and teams that aren't in
+the bracket yet (say, ones that signed up after play started) are marked "not in bracket" so you can
+drop them into an empty spot. Spots that are already decided are locked until you undo that result.
+
+Once you've edited it by hand, new teams are no longer added automatically. **Reset Bracket** clears
+all results and goes back to the automatic layout.
 
 ## Looking at or editing data by hand
 
