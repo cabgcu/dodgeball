@@ -56,8 +56,8 @@
         <div class="mb-6 w-full max-w-6xl flex justify-center space-x-2 sm:space-x-4">
             <button id="tab-register" onclick="switchView('register')" class="px-4 sm:px-6 py-3 rounded-t-lg bg-white shadow-md text-brand-600 font-bold border-t-4 border-brand-600 focus:outline-none transition-all">Registration</button>
             <button id="tab-bracket" onclick="switchView('bracket')" class="px-4 sm:px-6 py-3 rounded-t-lg bg-slate-200 text-slate-600 font-medium hover:bg-slate-300 focus:outline-none transition-all border-t-4 border-transparent">Live Bracket</button>
-            <button id="tab-admin" onclick="switchView('admin')" class="px-4 sm:px-6 py-3 rounded-t-lg bg-slate-800 text-slate-300 font-medium hover:bg-slate-700 focus:outline-none transition-all border-t-4 border-transparent flex items-center gap-2 shadow-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" /></svg>
+            <button id="tab-admin" onclick="switchView('admin')" class="px-4 sm:px-6 py-3 rounded-t-lg bg-slate-200 text-slate-600 font-medium hover:bg-slate-300 focus:outline-none transition-all border-t-4 border-transparent flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" /></svg>
                 Admin Control
             </button>
         </div>
@@ -211,162 +211,129 @@
             </div>
 
             <!-- VIEW: ADMIN DASHBOARD -->
-            <div id="view-admin" class="hidden bg-slate-900 text-slate-200">
-                
-                <div id="admin-login-area" class="max-w-md mx-auto py-24 px-6">
-                    <div class="bg-slate-800 p-8 rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.5)] border border-slate-700 text-center">
-                        <div class="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+            <div id="view-admin" class="hidden bg-slate-50">
+
+                <div id="admin-login-area" class="max-w-sm mx-auto py-20 px-6">
+                    <div class="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm text-center">
+                        <div class="w-14 h-14 bg-brand-50 rounded-full flex items-center justify-center mx-auto mb-5">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                         </div>
-                        <h2 class="text-2xl font-black mb-2 text-white">Admin Access</h2>
-                        <p class="text-slate-400 mb-8 text-sm">Enter password to unlock tournament controls</p>
-                        <form onsubmit="handleAdminLogin(event)" class="space-y-4">
-                            <input type="password" id="admin-password" placeholder="Password" class="w-full px-4 py-3 rounded-lg bg-slate-900 border border-slate-600 text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all font-mono text-center tracking-widest">
-                            <button type="submit" class="w-full py-3 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-lg transition-all shadow-lg hover:shadow-brand-500/20">Unlock Controls</button>
+                        <h2 class="text-xl font-bold text-slate-900 mb-1">Admin Access</h2>
+                        <p class="text-slate-500 mb-6 text-sm">Enter the password to unlock tournament controls.</p>
+                        <form onsubmit="handleAdminLogin(event)" class="space-y-3">
+                            <input type="password" id="admin-password" placeholder="Password" class="w-full px-4 py-3 rounded-lg bg-white border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 transition-all text-center">
+                            <button type="submit" class="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg transition-colors shadow-sm">Unlock Controls</button>
                         </form>
                     </div>
                 </div>
 
-                <div id="admin-dashboard-area" class="hidden flex flex-col md:flex-row min-h-screen">
-                    <!-- Admin Sidebar -->
-                    <div class="w-full md:w-64 bg-slate-950 border-r border-slate-800 flex flex-col shadow-2xl z-10">
-                        <div class="p-6 border-b border-slate-800">
-                            <h2 class="text-xl font-black text-white flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse"></span>
-                                Control Center
-                            </h2>
-                            <p class="text-xs text-slate-500 mt-1">Dodgeball After Dark</p>
+                <div id="admin-dashboard-area" class="hidden">
+                    <!-- Admin toolbar -->
+                    <div class="bg-white border-b border-slate-200 px-6 sm:px-10 py-4 flex flex-wrap items-center justify-between gap-4">
+                        <div class="flex items-center gap-6">
+                            <div>
+                                <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-brand-500"></span>Control Center</h2>
+                            </div>
+                            <nav class="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                                <button onclick="switchAdminTab('settings')" id="nav-settings" class="admin-tab-btn px-4 py-1.5 rounded-md text-sm font-semibold transition-colors">Overview</button>
+                                <button onclick="switchAdminTab('roster')" id="nav-roster" class="admin-tab-btn px-4 py-1.5 rounded-md text-sm font-semibold transition-colors">Rosters</button>
+                            </nav>
                         </div>
-                        <div class="p-4 flex-1 space-y-2">
-                            <button onclick="switchAdminTab('settings')" class="w-full text-left px-4 py-3 rounded-lg bg-slate-800 text-white font-medium shadow-sm border border-slate-700 flex items-center gap-3 transition-colors hover:bg-slate-700 admin-tab-btn" id="nav-settings">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" /></svg> Global Settings
-                            </button>
-                            <button onclick="switchAdminTab('roster')" class="w-full text-left px-4 py-3 rounded-lg text-slate-400 font-medium hover:bg-slate-800 hover:text-white transition-colors flex items-center gap-3 admin-tab-btn" id="nav-roster">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400" viewBox="0 0 20 20" fill="currentColor"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" /></svg> Manage Rosters
-                            </button>
-                        </div>
-                        <div class="p-4 border-t border-slate-800 space-y-3">
-                            <button onclick="openProjectorMode()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all flex justify-center items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2h-2.22l.123.489.804.804A1 1 0 0113 18H7a1 1 0 01-.707-1.707l.804-.804L7.22 15H5a2 2 0 01-2-2V5zm5.771 7H5V5h10v7H8.771z" clip-rule="evenodd" /></svg>
+                        <div class="flex items-center gap-2">
+                            <button onclick="openProjectorMode()" class="px-4 py-2 bg-slate-900 hover:bg-slate-700 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2h-2.22l.123.489.804.804A1 1 0 0113 18H7a1 1 0 01-.707-1.707l.804-.804L7.22 15H5a2 2 0 01-2-2V5zm5.771 7H5V5h10v7H8.771z" clip-rule="evenodd" /></svg>
                                 Launch Projector
                             </button>
-                            <button onclick="logoutAdmin()" class="w-full py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors">Log Out</button>
+                            <button onclick="logoutAdmin()" class="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">Log Out</button>
                         </div>
                     </div>
 
-                    <!-- Admin Main Content -->
-                    <div class="flex-1 p-6 sm:p-10 bg-slate-900 overflow-y-auto">
-                        
-                        <!-- TAB: Settings -->
-                        <div id="admin-tab-settings" class="space-y-8">
-                            
-                            <!-- Top Stats Grid -->
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-                                    <h4 class="text-slate-400 text-sm font-bold uppercase tracking-wider mb-1">Registration</h4>
+                    <div class="p-6 sm:p-10">
+
+                        <!-- TAB: Overview -->
+                        <div id="admin-tab-settings" class="space-y-6">
+
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                                    <div class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Registration</div>
                                     <div class="flex items-center justify-between">
-                                        <span id="status-reg" class="text-2xl font-black text-green-400">OPEN</span>
-                                        <button onclick="toggleRegistration()" class="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded transition">Toggle</button>
+                                        <span id="status-reg" class="text-2xl font-black text-green-600">OPEN</span>
+                                        <button onclick="toggleRegistration()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-md transition-colors">Toggle</button>
                                     </div>
                                 </div>
-                                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-                                    <h4 class="text-slate-400 text-sm font-bold uppercase tracking-wider mb-1">Waitlist Status</h4>
+                                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                                    <div class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Waitlist</div>
                                     <div class="flex items-center justify-between">
-                                        <span id="status-waitlist" class="text-2xl font-black text-red-400">CLOSED</span>
-                                        <button onclick="toggleWaitlist()" class="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded transition">Toggle</button>
+                                        <span id="status-waitlist" class="text-2xl font-black text-brand-600">CLOSED</span>
+                                        <button onclick="toggleWaitlist()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-md transition-colors">Toggle</button>
                                     </div>
                                 </div>
-                                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg bg-gradient-to-br from-slate-800 to-slate-900">
-                                    <h4 class="text-slate-400 text-sm font-bold uppercase tracking-wider mb-1">Total Teams</h4>
+                                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                                    <div class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Teams</div>
                                     <div class="flex items-center justify-between">
-                                        <span id="status-teamcount" class="text-3xl font-black text-white">0</span>
-                                        <button onclick="switchAdminTab('roster')" class="text-brand-400 hover:text-brand-300 text-sm font-medium underline">View All</button>
+                                        <span id="status-teamcount" class="text-2xl font-black text-slate-900">0</span>
+                                        <button onclick="switchAdminTab('roster')" class="text-brand-600 hover:text-brand-700 text-sm font-semibold">View rosters →</button>
                                     </div>
                                 </div>
                             </div>
 
                             <!-- Match Timers -->
-                            <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-lg p-6">
-                                <div class="flex justify-between items-center mb-6">
-                                    <h3 class="text-xl font-bold text-white flex items-center gap-2">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                        Live Court Timers
-                                    </h3>
-                                    <span class="text-xs text-slate-400 bg-slate-900 px-3 py-1 rounded-full border border-slate-700">Projector Synced</span>
+                            <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                                <div class="flex justify-between items-center mb-5">
+                                    <h3 class="text-lg font-bold text-slate-900">Court Timers</h3>
+                                    <span class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">Synced to projector</span>
                                 </div>
-                                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6" id="timers-container">
-                                    <!-- Timers injected here -->
-                                </div>
+                                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4" id="timers-container"></div>
                             </div>
 
                             <!-- Waitlist Manager -->
-                            <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-lg p-6">
-                                <div class="flex justify-between items-center mb-4 border-b border-slate-700 pb-4">
-                                    <h3 class="text-xl font-bold text-white flex items-center gap-2">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-amber-500" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" /></svg>
-                                        Waitlist Manager
+                            <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div>
+                                    <h3 class="text-lg font-bold text-slate-900 flex items-center gap-3">Waitlist
+                                        <span class="text-xs font-semibold text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-full"><span id="admin-waitlist-count">0</span> waiting</span>
                                     </h3>
-                                    <div class="bg-amber-900/30 text-amber-500 font-black px-4 py-1 rounded-full border border-amber-800"><span id="admin-waitlist-count">0</span> Waiting</div>
+                                    <p class="text-sm text-slate-500 mt-1">Fill teams that are short on players with free agents, or form new teams when enough are waiting.</p>
                                 </div>
-                                <p class="text-sm text-slate-400 mb-6">Automatically assign free agents to teams with fewer than 6 players, or create new teams if enough players are waiting.</p>
-                                <button onclick="processWaitlist()" class="px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg shadow-md transition-colors flex items-center gap-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
-                                    Auto-Process Free Agents
-                                </button>
+                                <button onclick="processWaitlist()" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors shrink-0">Auto-Process Free Agents</button>
                             </div>
 
                             <!-- Bracket Controls -->
-                            <div class="bg-slate-800 rounded-xl border border-slate-700 shadow-lg p-6 border-l-4 border-l-brand-500">
-                                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                            <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 gap-4">
                                     <div>
-                                        <h3 class="text-xl font-bold text-white mb-1">Live Bracket Management</h3>
-                                        <p class="text-sm text-slate-400">Click on a team to advance them to the next round. This will eliminate the opponent. Made a mistake? Click the winner (✓) to undo.</p>
+                                        <h3 class="text-lg font-bold text-slate-900">Bracket</h3>
+                                        <p class="text-sm text-slate-500 mt-1">Click a team to advance it and eliminate its opponent. Made a mistake? Click the winner (✓) to undo.</p>
                                     </div>
-                                    <button onclick="confirmResetBracket()" class="px-4 py-2 bg-slate-900 hover:bg-red-600 border border-slate-700 hover:border-red-500 text-white text-sm font-bold rounded-lg transition-all shadow-sm shrink-0">
-                                        Reset Bracket Progress
-                                    </button>
+                                    <button onclick="confirmResetBracket()" class="px-4 py-2 bg-white hover:bg-red-50 border border-slate-300 hover:border-red-300 text-slate-700 hover:text-red-700 text-sm font-semibold rounded-lg transition-colors shrink-0">Reset Bracket</button>
                                 </div>
-                                <div class="overflow-x-auto pb-4 relative w-full rounded-lg border border-slate-700 bg-slate-900/50 flex justify-start shadow-inner min-h-[400px]">
-                                    <div class="p-6 min-w-max relative flex flex-col" id="admin-bracket-scroll-area">
+                                <div class="overflow-x-auto relative w-full rounded-lg border border-slate-200 bg-slate-50">
+                                    <div class="p-6 w-max relative flex flex-col" id="admin-bracket-scroll-area">
                                         <div id="admin-bracket-headers" class="relative h-12 mb-4 w-full"></div>
                                         <div id="admin-bracket-canvas" class="relative w-full flex-1"></div>
                                     </div>
                                 </div>
                             </div>
-
                         </div>
 
-                        <!-- TAB: Roster Manager -->
+                        <!-- TAB: Rosters -->
                         <div id="admin-tab-roster" class="hidden space-y-6">
-                            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 border-b border-slate-700 pb-4">
+                            <div class="flex flex-col md:flex-row justify-between md:items-end gap-4">
                                 <div>
-                                    <h2 class="text-3xl font-black text-white mb-1">Roster & Check-In Manager</h2>
-                                    <p class="text-slate-400 text-sm">Manage participants, view assignments, and track round attendance</p>
+                                    <h2 class="text-2xl font-bold text-slate-900">Rosters &amp; Check-In</h2>
+                                    <p class="text-slate-500 text-sm mt-1">Teams are listed A–Z. Advancing a team clears its check-ins so players check in again for the next round.</p>
                                 </div>
-                                <div class="flex flex-wrap gap-3">
-                                    <input type="search" id="roster-search" oninput="renderRosterTable()" placeholder="Search players, teams, emails..." class="w-64 px-3 py-2 rounded bg-slate-800 border border-slate-600 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500">
-                                    <button onclick="addEmptyTeam()" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white text-sm font-bold rounded shadow transition">+ Add Empty Team</button>
+                                <div class="flex flex-wrap gap-2">
+                                    <div class="relative">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" /></svg>
+                                        <input type="search" id="roster-search" oninput="renderRosterTable()" placeholder="Search players or teams" class="w-64 pl-9 pr-3 py-2 rounded-lg bg-white border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
+                                    </div>
+                                    <button onclick="addEmptyTeam()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors">+ Add Team</button>
                                 </div>
                             </div>
 
-                            <div id="admin-roster-summary" class="flex flex-wrap gap-3 text-xs font-bold"></div>
+                            <div id="admin-roster-summary" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
 
-                            <div class="overflow-x-auto rounded-xl border border-slate-700 shadow-lg">
-                                <table class="min-w-full text-sm text-left">
-                                    <thead class="bg-slate-950 text-slate-400 text-xs uppercase tracking-wider">
-                                        <tr>
-                                            <th class="px-4 py-3">Player</th>
-                                            <th class="px-4 py-3">Role</th>
-                                            <th class="px-4 py-3">Email</th>
-                                            <th class="px-4 py-3">Student ID</th>
-                                            <th class="px-4 py-3">Phone</th>
-                                            <th class="px-4 py-3 text-center">Check-In</th>
-                                            <th class="px-4 py-3 text-right">Remove</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="admin-roster-table"></tbody>
-                                </table>
-                            </div>
+                            <div id="admin-roster-table" class="space-y-5"></div>
                         </div>
                     </div>
                 </div>
@@ -527,7 +494,7 @@
 
             document.getElementById('tab-register').className = "px-4 sm:px-6 py-3 rounded-t-lg bg-slate-200 text-slate-600 font-medium hover:bg-slate-300 focus:outline-none transition-all border-t-4 border-transparent";
             document.getElementById('tab-bracket').className = "px-4 sm:px-6 py-3 rounded-t-lg bg-slate-200 text-slate-600 font-medium hover:bg-slate-300 focus:outline-none transition-all border-t-4 border-transparent";
-            document.getElementById('tab-admin').className = "px-4 sm:px-6 py-3 rounded-t-lg bg-slate-200 text-slate-600 font-medium hover:bg-slate-300 focus:outline-none transition-all border-t-4 border-transparent flex items-center gap-2 shadow-sm";
+            document.getElementById('tab-admin').className = "px-4 sm:px-6 py-3 rounded-t-lg bg-slate-200 text-slate-600 font-medium hover:bg-slate-300 focus:outline-none transition-all border-t-4 border-transparent flex items-center gap-2";
 
             if (view === 'register') {
                 document.getElementById('view-register').classList.remove('hidden');
@@ -539,7 +506,7 @@
                 loadState();
             } else if (view === 'admin') {
                 document.getElementById('view-admin').classList.remove('hidden');
-                document.getElementById('tab-admin').className = "px-4 sm:px-6 py-3 rounded-t-lg bg-slate-800 text-white font-medium hover:bg-slate-700 focus:outline-none transition-all border-t-4 border-transparent flex items-center gap-2 shadow-lg border-slate-600";
+                document.getElementById('tab-admin').className = "px-4 sm:px-6 py-3 rounded-t-lg bg-white shadow-md text-brand-600 font-bold border-t-4 border-brand-600 focus:outline-none transition-all flex items-center gap-2";
                 if (AppState.adminToken) showAdminDashboard();
             }
         }
@@ -595,9 +562,9 @@
             const wlOpen = AppState.settings.waitlistOpen;
 
             document.getElementById('status-reg').innerText = regOpen ? 'OPEN' : 'CLOSED';
-            document.getElementById('status-reg').className = regOpen ? 'text-2xl font-black text-green-400' : 'text-2xl font-black text-red-400';
+            document.getElementById('status-reg').className = regOpen ? 'text-2xl font-black text-green-600' : 'text-2xl font-black text-brand-600';
             document.getElementById('status-waitlist').innerText = wlOpen ? 'OPEN' : 'CLOSED';
-            document.getElementById('status-waitlist').className = wlOpen ? 'text-2xl font-black text-green-400' : 'text-2xl font-black text-red-400';
+            document.getElementById('status-waitlist').className = wlOpen ? 'text-2xl font-black text-green-600' : 'text-2xl font-black text-brand-600';
 
             document.getElementById('btn-create-team').style.display = regOpen ? '' : 'none';
             document.getElementById('btn-join-team').style.display = regOpen ? '' : 'none';
@@ -939,14 +906,15 @@
 
             const matches = AppState.bracket;
             const numRounds = matches.length;
-            const dark = isProjector || isAdmin;
+            const dark = isProjector;
 
             // Pixel layout: every match is centred between the two matches that feed it.
             const colW = isProjector ? 320 : 260;
             const cardW = colW - 56;
             const matchH = isProjector ? 140 : 110;
             const champH = isProjector ? 240 : 190;
-            const padY = Math.ceil(champH / 2);
+            const finalOffset = 0.5 * Math.pow(2, Math.max(numRounds - 2, 0)) * matchH;
+            const padY = Math.max(16, Math.ceil(champH / 2 - finalOffset) + 8);
             const lineColor = dark ? '#475569' : '#cbd5e1';
             const firstRound = matches[0].length;
             const totalW = (numRounds - 1) * colW + cardW;
@@ -1105,14 +1073,14 @@
             document.getElementById('admin-tab-roster').classList.add('hidden');
 
             document.querySelectorAll('.admin-tab-btn').forEach(btn => {
-                btn.classList.remove('bg-slate-800', 'text-white', 'shadow-sm', 'border-slate-700');
-                btn.classList.add('text-slate-400');
+                const active = btn.id === 'nav-' + tab;
+                btn.classList.toggle('bg-white', active);
+                btn.classList.toggle('text-slate-900', active);
+                btn.classList.toggle('shadow-sm', active);
+                btn.classList.toggle('text-slate-500', !active);
+                btn.classList.toggle('hover:text-slate-900', !active);
             });
-
             document.getElementById('admin-tab-' + tab).classList.remove('hidden');
-            let activeBtn = document.getElementById('nav-' + tab);
-            activeBtn.classList.remove('text-slate-400');
-            activeBtn.classList.add('bg-slate-800', 'text-white', 'shadow-sm', 'border', 'border-slate-700');
         }
 
         function toggleRegistration() {
@@ -1163,15 +1131,15 @@
 
         // Where a team currently stands in the bracket.
         function teamStage(team) {
-            if (team.eliminated) return { text: 'Eliminated', cls: 'bg-red-500/20 text-red-400' };
+            if (team.eliminated) return { text: 'Eliminated', cls: 'bg-red-50 text-red-700' };
             const numRounds = AppState.bracket.length;
             let stage = -1;
             AppState.bracket.forEach((round, r) => round.forEach(mt => {
                 if ((mt.team1 && mt.team1.id === team.id) || (mt.team2 && mt.team2.id === team.id)) stage = Math.max(stage, r);
             }));
-            if (stage < 0) return { text: 'Not in bracket', cls: 'bg-slate-700 text-slate-400' };
-            if (stage === numRounds - 1) return { text: 'Champion', cls: 'bg-amber-500/20 text-amber-300' };
-            return { text: roundLabel(stage, numRounds), cls: 'bg-blue-500/20 text-blue-300' };
+            if (stage < 0) return { text: 'Not in bracket', cls: 'bg-slate-100 text-slate-500' };
+            if (stage === numRounds - 1) return { text: 'Champion', cls: 'bg-amber-100 text-amber-800' };
+            return { text: roundLabel(stage, numRounds), cls: 'bg-blue-50 text-blue-700' };
         }
 
         const ROLE_ORDER = { Captain: 0, Player: 1, Alternate: 2 };
@@ -1180,23 +1148,70 @@
             return [...players].sort((a, b) => (ROLE_ORDER[a.role] ?? 1) - (ROLE_ORDER[b.role] ?? 1) || a.name.localeCompare(b.name));
         }
 
+        const ICONS = {
+            plus: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14M5 12h14"/>',
+            reset: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M5.6 15a7 7 0 0011.8 2.4M18.4 9A7 7 0 006.6 6.6"/>',
+            trash: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m2 0l-.8 12a2 2 0 01-2 1.9H8.8a2 2 0 01-2-1.9L6 7"/>',
+            x: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 6l12 12M18 6L6 18"/>',
+        };
+        const icon = (name, cls = 'h-4 w-4') => `<svg xmlns="http://www.w3.org/2000/svg" class="${cls}" fill="none" viewBox="0 0 24 24" stroke="currentColor">${ICONS[name]}</svg>`;
+
         function rosterPlayerRow(p, { checkIn = true } = {}) {
-            const roleCls = p.role === 'Captain' ? 'bg-brand-500/20 text-brand-400' : p.role === 'Alternate' ? 'bg-slate-600/40 text-slate-300' : 'bg-slate-700/60 text-slate-400';
-            const checkBtn = checkIn
-                ? `<button onclick="toggleCheckIn('${esc(p.playerId)}')" title="Toggle check-in" class="w-24 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider transition-colors ${p.checkedIn ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-700 hover:bg-slate-600 text-slate-300 border border-slate-600'}">${p.checkedIn ? '✓ In' : 'Check In'}</button>`
-                : '<span class="text-slate-600">—</span>';
+            const role = p.role === 'Captain'
+                ? '<span class="ml-2 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-brand-50 text-brand-700">Captain</span>'
+                : p.role === 'Alternate' ? '<span class="ml-2 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600">Alternate</span>' : '';
+            const toggle = checkIn ? `
+                <button onclick="toggleCheckIn('${esc(p.playerId)}')" role="switch" aria-checked="${p.checkedIn}" title="${p.checkedIn ? 'Checked in — click to undo' : 'Click to check in'}" class="inline-flex items-center gap-2 group/toggle">
+                    <span class="relative inline-block w-9 h-5 rounded-full transition-colors ${p.checkedIn ? 'bg-emerald-500' : 'bg-slate-300 group-hover/toggle:bg-slate-400'}">
+                        <span class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${p.checkedIn ? 'translate-x-4' : ''}"></span>
+                    </span>
+                    <span class="text-xs font-semibold w-20 text-left whitespace-nowrap ${p.checkedIn ? 'text-emerald-700' : 'text-slate-400'}">${p.checkedIn ? 'Checked in' : 'Not in'}</span>
+                </button>` : '';
             return `
-                <tr class="border-t border-slate-800 hover:bg-slate-800/40">
-                    <td class="px-4 py-2.5 font-semibold text-slate-100 whitespace-nowrap">${esc(p.name)}</td>
-                    <td class="px-4 py-2.5"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${roleCls}">${esc(p.role)}</span></td>
-                    <td class="px-4 py-2.5 text-slate-300 font-mono text-xs">${esc(p.email || '—')}</td>
-                    <td class="px-4 py-2.5 text-slate-300 font-mono text-xs">${esc(p.studentId || '—')}</td>
-                    <td class="px-4 py-2.5 text-slate-400 font-mono text-xs whitespace-nowrap">${esc(p.phone || '—')}</td>
-                    <td class="px-4 py-2.5 text-center">${checkBtn}</td>
-                    <td class="px-4 py-2.5 text-right">
-                        <button onclick="confirmRemovePlayer('${esc(p.playerId)}')" title="Remove player" class="px-2 py-1 text-xs font-bold text-red-400 hover:text-white hover:bg-red-600 rounded transition-colors">✕</button>
+                <tr class="hover:bg-slate-50/70">
+                    <td class="pl-6 pr-4 py-3.5 truncate"><span class="font-medium text-slate-900">${esc(p.name)}</span>${role}</td>
+                    <td class="px-4 py-3.5 text-slate-600 truncate" title="${esc(p.email || '')}">${esc(p.email || '—')}</td>
+                    <td class="px-4 py-3.5 text-slate-600 tabular-nums">${esc(p.studentId || '—')}</td>
+                    <td class="px-4 py-3.5 text-slate-600 tabular-nums whitespace-nowrap">${esc(p.phone || '—')}</td>
+                    <td class="px-4 py-3.5">${toggle}</td>
+                    <td class="pl-2 pr-6 py-3.5 text-right">
+                        <button onclick="confirmRemovePlayer('${esc(p.playerId)}')" title="Remove player" class="p-1.5 rounded-md text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors">${icon('x')}</button>
                     </td>
                 </tr>`;
+        }
+
+        function rosterTable(rows, { checkIn = true } = {}) {
+            return `
+                <div class="overflow-x-auto">
+                    <table class="w-full min-w-[820px] table-fixed text-sm text-left">
+                        <colgroup>
+                            <col class="w-[26%]"><col class="w-[27%]"><col class="w-[14%]"><col class="w-[13%]">
+                            <col class="w-[15%]"><col class="w-[5%]">
+                        </colgroup>
+                        <thead>
+                            <tr class="text-[11px] uppercase tracking-wider text-slate-400 border-y border-slate-100">
+                                <th class="pl-6 pr-4 py-2.5 font-semibold">Player</th>
+                                <th class="px-4 py-2.5 font-semibold">Email</th>
+                                <th class="px-4 py-2.5 font-semibold">Student ID</th>
+                                <th class="px-4 py-2.5 font-semibold">Phone</th>
+                                <th class="px-4 py-2.5 font-semibold">${checkIn ? 'Check-in' : ''}</th>
+                                <th class="pl-2 pr-6 py-2.5"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">${rows}</tbody>
+                    </table>
+                </div>`;
+        }
+
+        function statTile(label, value, extra = '') {
+            return `<div class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4">
+                <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">${label}</div>
+                <div class="text-2xl font-bold text-slate-900 mt-1">${value}</div>${extra}</div>`;
+        }
+
+        function progressBar(done, total, cls = 'h-1.5') {
+            const pct = total ? Math.round(done / total * 100) : 0;
+            return `<div class="${cls} bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-emerald-500 rounded-full transition-all" style="width:${pct}%"></div></div>`;
         }
 
         function renderRosterTable() {
@@ -1206,6 +1221,12 @@
             const matches = p => !query || [p.name, p.email, p.studentId, p.phone].some(v => String(v || '').toLowerCase().includes(query));
 
             const teams = [...AppState.teams].sort((a, b) => a.name.localeCompare(b.name));
+
+            // The state is polled every few seconds; skip the rebuild when nothing on screen would change.
+            const signature = JSON.stringify([query, teams.map(t => [t.id, t.name, t.code, t.eliminated, teamStage(t).text, t.players]), AppState.waitlist]);
+            if (body.dataset.signature === signature) return;
+            body.dataset.signature = signature;
+
             let html = '';
             let totalPlayers = 0, totalIn = 0;
 
@@ -1220,46 +1241,52 @@
                 const stage = teamStage(team);
                 const allIn = team.players.length > 0 && checkedIn === team.players.length;
                 html += `
-                    <tr class="bg-slate-800 border-t-2 border-slate-600">
-                        <td colspan="7" class="px-4 py-3">
-                            <div class="flex flex-wrap items-center justify-between gap-3">
-                                <div class="flex flex-wrap items-center gap-3">
-                                    <span class="text-base font-black ${team.eliminated ? 'line-through text-slate-500' : 'text-white'}">${esc(team.name)}</span>
-                                    <span class="text-xs font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded">Code: ${esc(team.code)}</span>
-                                    <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded ${stage.cls}">${esc(stage.text)}</span>
-                                    <span class="text-xs text-slate-400">${team.players.length} player${team.players.length === 1 ? '' : 's'}</span>
-                                    <span class="text-xs font-bold ${allIn ? 'text-emerald-400' : 'text-slate-400'}">${checkedIn}/${team.players.length} checked in</span>
+                    <section class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden ${team.eliminated ? 'opacity-60' : ''}">
+                        <header class="px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+                            <div class="min-w-0">
+                                <div class="flex flex-wrap items-center gap-2.5">
+                                    <h3 class="text-lg font-bold text-slate-900 ${team.eliminated ? 'line-through' : ''}">${esc(team.name)}</h3>
+                                    <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${stage.cls}">${esc(stage.text)}</span>
                                 </div>
-                                <div class="flex flex-wrap gap-2">
-                                    <button onclick="checkInTeam('${esc(team.id)}')" class="text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40 border border-emerald-600/30 rounded transition-colors">Check In All</button>
-                                    <button onclick="resetTeamCheckIn('${esc(team.id)}')" class="text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 border border-slate-600 rounded transition-colors">Reset Check-In</button>
-                                    <button onclick="adminAddPlayerModal('${esc(team.id)}')" class="text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded transition-colors border border-brand-500">+ Player</button>
-                                    <button onclick="confirmDeleteTeam('${esc(team.id)}')" class="text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 bg-slate-900 hover:bg-red-600 text-red-400 hover:text-white border border-red-900 rounded transition-colors">Delete Team</button>
+                                <div class="text-xs text-slate-500 mt-1">Code <span class="font-mono font-semibold text-slate-700">${esc(team.code)}</span> · ${team.players.length} player${team.players.length === 1 ? '' : 's'}</div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-x-5 gap-y-3">
+                                <div class="w-36">
+                                    <div class="flex justify-between text-xs mb-1"><span class="text-slate-500">Checked in</span><span class="font-semibold ${allIn ? 'text-emerald-700' : 'text-slate-700'}">${checkedIn}/${team.players.length}</span></div>
+                                    ${progressBar(checkedIn, team.players.length)}
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <button onclick="checkInTeam('${esc(team.id)}')" class="px-3 py-1.5 whitespace-nowrap text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">Check in all</button>
+                                    <button onclick="resetTeamCheckIn('${esc(team.id)}')" title="Clear check-ins" class="p-2 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors">${icon('reset')}</button>
+                                    <button onclick="adminAddPlayerModal('${esc(team.id)}')" title="Add player" class="p-2 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors">${icon('plus')}</button>
+                                    <button onclick="confirmDeleteTeam('${esc(team.id)}')" title="Delete team" class="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors">${icon('trash')}</button>
                                 </div>
                             </div>
-                        </td>
-                    </tr>`;
-                html += shown.length
-                    ? sortPlayers(shown).map(p => rosterPlayerRow(p)).join('')
-                    : `<tr class="border-t border-slate-800"><td colspan="7" class="px-4 py-3 text-slate-500 italic">No players added yet.</td></tr>`;
+                        </header>
+                        ${shown.length
+                            ? rosterTable(sortPlayers(shown).map(p => rosterPlayerRow(p)).join(''))
+                            : '<div class="px-6 py-6 border-t border-slate-100 text-sm text-slate-400">No players yet. Use + to add one.</div>'}
+                    </section>`;
             });
 
             const waiting = AppState.waitlist.filter(matches);
             if (waiting.length) {
                 html += `
-                    <tr class="bg-amber-900/20 border-t-2 border-amber-800/60">
-                        <td colspan="7" class="px-4 py-3 text-base font-black text-amber-400">Waitlist (Free Agents) <span class="text-xs font-bold text-amber-500/80 ml-2">${waiting.length} waiting</span></td>
-                    </tr>`;
-                html += waiting.map(p => rosterPlayerRow(p, { checkIn: false })).join('');
+                    <section class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        <header class="px-6 py-4 flex items-center gap-2.5">
+                            <h3 class="text-lg font-bold text-slate-900">Waitlist</h3>
+                            <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800">${waiting.length} free agent${waiting.length === 1 ? '' : 's'}</span>
+                        </header>
+                        ${rosterTable(waiting.map(p => rosterPlayerRow(p, { checkIn: false })).join(''), { checkIn: false })}
+                    </section>`;
             }
 
-            body.innerHTML = html || `<tr><td colspan="7" class="px-4 py-10 text-center text-slate-500 italic">${query ? 'No matches.' : 'No teams registered yet.'}</td></tr>`;
-            document.getElementById('admin-roster-summary').innerHTML = `
-                <span class="px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300">${AppState.teams.length} teams</span>
-                <span class="px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300">${totalPlayers} rostered players</span>
-                <span class="px-3 py-1 rounded-full bg-emerald-900/30 border border-emerald-800 text-emerald-400">${totalIn} checked in</span>
-                <span class="px-3 py-1 rounded-full bg-amber-900/30 border border-amber-800 text-amber-400">${AppState.waitlist.length} on waitlist</span>
-                <span class="px-3 py-1 text-slate-500 font-medium">Advancing a team resets its check-ins so players can check in again for the next round.</span>`;
+            body.innerHTML = html || `<div class="bg-white rounded-2xl border border-dashed border-slate-300 px-6 py-16 text-center text-slate-400">${query ? 'No players or teams match your search.' : 'No teams registered yet.'}</div>`;
+            document.getElementById('admin-roster-summary').innerHTML =
+                statTile('Teams', AppState.teams.length) +
+                statTile('Players', totalPlayers) +
+                statTile('Checked in', `${totalIn}<span class="text-base font-medium text-slate-400"> / ${totalPlayers}</span>`, `<div class="mt-2">${progressBar(totalIn, totalPlayers)}</div>`) +
+                statTile('Waitlist', AppState.waitlist.length);
         }
 
         function findAnyPlayer(playerId) {
@@ -1383,28 +1410,23 @@
                     let defMins = Math.floor(t.defaultTime / 60);
 
                     let div = document.createElement('div');
-                    div.className = "p-4 bg-slate-900 rounded-lg border border-slate-700 flex flex-col gap-4";
+                    div.className = "p-5 bg-slate-50 rounded-xl border border-slate-200 flex flex-col gap-4";
                     div.innerHTML = `
-                        <div class="flex justify-between items-center border-b border-slate-800 pb-2">
-                            <span class="font-bold text-slate-300">${esc(t.name)}</span>
-                            <div class="flex items-center gap-1 text-xs text-slate-500">
-                                Set Mins:
+                        <div class="flex justify-between items-center">
+                            <span class="font-semibold text-slate-700">${esc(t.name)}</span>
+                            <label class="flex items-center gap-1.5 text-xs text-slate-500">
+                                Minutes
                                 <input type="number" value="${defMins}" min="1" max="60"
                                     onchange="updateTimerDefault(${index}, this.value)"
-                                    class="w-12 bg-slate-800 border border-slate-600 rounded px-1 py-0.5 text-center text-white focus:outline-none focus:border-brand-500">
-                            </div>
+                                    class="w-14 bg-white border border-slate-300 rounded-md px-2 py-1 text-center text-slate-900 focus:outline-none focus:border-brand-500">
+                            </label>
                         </div>
-                        <div class="flex flex-col items-center gap-4">
-                            <div data-timer-admin="${index}" class="text-4xl font-mono font-bold ${running ? 'text-brand-500' : 'text-slate-200'} tracking-wider drop-shadow-md">
-                                ${formatTime(left)}
-                            </div>
-                            <div class="flex gap-2 w-full">
-                                ${running
-                                    ? `<button onclick="toggleTimer(${index})" class="flex-1 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold rounded shadow-sm transition">Pause</button>`
-                                    : `<button onclick="toggleTimer(${index})" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded shadow-sm transition">Start</button>`
-                                }
-                                <button onclick="resetTimer(${index})" class="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-bold rounded shadow-sm transition">Reset</button>
-                            </div>
+                        <div data-timer-admin="${index}" class="text-5xl text-center font-mono font-bold tabular-nums ${running ? 'text-brand-600' : 'text-slate-900'}">${formatTime(left)}</div>
+                        <div class="flex gap-2">
+                            ${running
+                                ? `<button onclick="toggleTimer(${index})" class="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors">Pause</button>`
+                                : `<button onclick="toggleTimer(${index})" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors">Start</button>`}
+                            <button onclick="resetTimer(${index})" class="flex-1 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg transition-colors">Reset</button>
                         </div>
                     `;
                     container.appendChild(div);
@@ -1514,6 +1536,7 @@
         }
 
         function init() {
+            switchAdminTab('settings');
             generateTeamCode();
             addPlayerField(); addPlayerField();
             try { AppState.adminToken = sessionStorage.getItem('dbAdminToken'); } catch (err) {}
