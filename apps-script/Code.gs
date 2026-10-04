@@ -39,6 +39,8 @@
  *  text/plain to avoid CORS preflight):
  *    { action: "getState" }                                    public
  *    { action: "register", payload: {...} }                    public
+ *    { action: "teamLookup" | "teamRemovePlayer" | "teamDelete",
+ *      payload: { teamCode, ... } }                            public, team code required
  *    { action: "login", payload: { password } }                public → token
  *    { action: "...", token, payload }                         admin actions
  *   A GET to the /exec URL returns the public state as JSON (handy for testing).
@@ -156,6 +158,9 @@ function doPost(e) {
 const ROUTES = {
   getState:        { fn: () => ({}) },
   register:        { fn: register_,        write: true },
+  teamLookup:      { fn: teamLookup_ },
+  teamRemovePlayer:{ fn: teamRemovePlayer_, write: true },
+  teamDelete:      { fn: teamDelete_,      write: true },
   login:           { fn: login_ },
   logout:          { fn: logout_ },
   setSetting:      { fn: setSetting_,      write: true, admin: true },
@@ -163,9 +168,12 @@ const ROUTES = {
   resetBracket:    { fn: resetBracket_,    write: true, admin: true },
   addTeam:         { fn: addTeam_,         write: true, admin: true },
   addPlayer:       { fn: addPlayer_,       write: true, admin: true },
+  removePlayer:    { fn: removePlayerAdmin_, write: true, admin: true },
+  deleteTeam:      { fn: deleteTeamAdmin_, write: true, admin: true },
   toggleCheckIn:   { fn: toggleCheckIn_,   write: true, admin: true },
   setTeamCheckIn:  { fn: setTeamCheckIn_,  write: true, admin: true },
   advanceTeam:     { fn: advanceTeam_,     write: true, admin: true },
+  undoAdvance:     { fn: undoAdvance_,     write: true, admin: true },
   timer:           { fn: timerAction_,     write: true, admin: true },
 };
 
@@ -309,7 +317,8 @@ function register_(p) {
     syncBracket_(teams);
     log_('register:create', team.name + ' (' + team.code + ') by ' + person.name + ' <' + person.email + '>, ' + (1 + extras.length) + ' players');
     return {
-      message: 'Your team "' + team.name + '" has been created! Share your code (' + team.code + ') with teammates so they can join.',
+      message: 'Your team "' + team.name + '" has been created! Share your code (' + team.code + ') with teammates so they can join. ' +
+        'Need to remove someone later? Use "Manage My Team" with the same code.',
       teamCode: team.code,
       teamName: team.name,
     };
@@ -395,6 +404,104 @@ function newPlayer_(team, person, role, now) {
     createdAt: now,
     updatedAt: now,
   };
+}
+
+/* =============================================================================
+ *  TEAM SELF-SERVICE (public — whoever holds the team code can manage the team)
+ * ========================================================================== */
+
+function teamLookup_(p) {
+  const team = teamByCode_(readTable_(S.TEAMS), p.teamCode);
+  return { team: managedTeamOut_(team, readTable_(S.PLAYERS)) };
+}
+
+function teamRemovePlayer_(p) {
+  const team = teamByCode_(readTable_(S.TEAMS), p.teamCode);
+  const players = readTable_(S.PLAYERS);
+  const removed = removePlayer_(players, p.playerId, team);
+  log_('team:removePlayer', removed.name + ' <' + removed.email + '> removed from ' + team.name + ' (team code)');
+  return { message: removed.name + ' was removed from "' + team.name + '".', team: managedTeamOut_(team, players) };
+}
+
+function teamDelete_(p) {
+  const teams = readTable_(S.TEAMS);
+  const team = teamByCode_(teams, p.teamCode);
+  if (bracketStarted_()) fail_('The tournament has already started, so "' + team.name + '" can no longer be deleted. Please talk to an organizer.');
+  const count = deleteTeam_(teams, team);
+  log_('team:delete', team.name + ' (' + team.code + ') and ' + count + ' players deleted (team code)');
+  return { message: '"' + team.name + '" and its roster have been deleted.' };
+}
+
+function teamByCode_(teams, code) {
+  const c = String(code || '').trim().toUpperCase();
+  if (!c) fail_('Please enter your team code.');
+  const team = teams.find(t => String(t.code).toUpperCase() === c);
+  if (!team) fail_('We couldn\'t find a team with the code ' + c + '. Please check and try again.');
+  return team;
+}
+
+/** Roster as a team (not an admin) sees it: emails, IDs and phones stay redacted. */
+function managedTeamOut_(team, players) {
+  return {
+    name: team.name,
+    code: team.code,
+    eliminated: team.eliminated,
+    canDelete: !bracketStarted_(),
+    maxTeamSize: getSettings_().maxTeamSize,
+    players: players
+      .filter(pl => pl.teamId === team.teamId && pl.status !== 'Waitlist')
+      .map(pl => ({
+        playerId: pl.playerId,
+        name: pl.name,
+        role: pl.role || 'Player',
+        email: maskEmail_(pl.email),
+        studentId: maskId_(pl.studentId),
+        confirmed: !!pl.studentId,
+      })),
+  };
+}
+
+/** Removes a player row. If the captain leaves, the longest-standing teammate takes over. */
+function removePlayer_(players, playerId, team) {
+  const i = players.findIndex(pl => pl.playerId === playerId && (!team || pl.teamId === team.teamId));
+  if (i < 0) fail_(team ? 'That player is not on this team.' : 'Player not found.');
+  const removed = players.splice(i, 1)[0];
+  if (removed.role === 'Captain' && removed.teamId) {
+    const next = players
+      .filter(pl => pl.teamId === removed.teamId && pl.status !== 'Waitlist')
+      .sort((a, b) => (a.role === 'Alternate') - (b.role === 'Alternate') || toTime_(a.createdAt) - toTime_(b.createdAt))[0];
+    if (next) {
+      next.role = 'Captain';
+      next.updatedAt = new Date();
+    }
+  }
+  writeTable_(S.PLAYERS, players);
+  return removed;
+}
+
+/** Deletes a team and every player on it. Returns how many players were removed. */
+function deleteTeam_(teams, team) {
+  const players = readTable_(S.PLAYERS);
+  const keep = players.filter(pl => pl.teamId !== team.teamId);
+  const remaining = teams.filter(t => t.teamId !== team.teamId);
+  writeTable_(S.TEAMS, remaining);
+  writeTable_(S.PLAYERS, keep);
+  syncBracket_(remaining);
+  return players.length - keep.length;
+}
+
+function maskEmail_(email) {
+  const s = String(email || '');
+  const at = s.indexOf('@');
+  if (!s) return '';
+  if (at < 1) return '••••••';
+  return s.charAt(0) + '•••••' + s.slice(at);
+}
+
+function maskId_(id) {
+  const s = String(id || '');
+  if (!s) return '';
+  return '•••••' + (s.length > 4 ? s.slice(-2) : '');
 }
 
 /* =============================================================================
@@ -517,6 +624,8 @@ function resetBracket_() {
   writeTable_(S.TEAMS, teams);
   writeTable_(S.BRACKET, []);
   syncBracket_(teams);
+  const props = PropertiesService.getScriptProperties();
+  props.getKeys().forEach(k => { if (k.indexOf('checkInSnapshot:') === 0) props.deleteProperty(k); });
   log_('bracket:reset', 'All match progress cleared, all teams reinstated');
   return {};
 }
@@ -568,6 +677,23 @@ function addPlayer_(p) {
   return {};
 }
 
+function removePlayerAdmin_(p) {
+  const players = readTable_(S.PLAYERS);
+  const removed = removePlayer_(players, p.playerId, null);
+  log_('player:remove', removed.name + ' <' + removed.email + '>' + (removed.teamName ? ' removed from ' + removed.teamName : ' removed from waitlist'));
+  return {};
+}
+
+function deleteTeamAdmin_(p) {
+  const teams = readTable_(S.TEAMS);
+  const team = teams.find(t => t.teamId === p.teamId);
+  if (!team) fail_('Team not found.');
+  if (bracketStarted_()) fail_('Matches have already been played. Reset the bracket before deleting a team.');
+  const count = deleteTeam_(teams, team);
+  log_('team:delete', team.name + ' (' + team.code + ') and ' + count + ' players deleted by admin');
+  return {};
+}
+
 function toggleCheckIn_(p) {
   const players = readTable_(S.PLAYERS);
   const player = players.find(pl => pl.playerId === p.playerId);
@@ -609,7 +735,10 @@ function advanceTeam_(p) {
   if (!winnerId) fail_('There is no team in that slot.');
   if (match.winnerId) {
     if (match.winnerId === winnerId) return {};
-    fail_('That match already has a winner. Reset the bracket (or edit the Bracket sheet) to change it.');
+    fail_('That match already has a winner. Click the winner to undo the result first.');
+  }
+  if (!loserId && slotPending_(rounds, r, m, slot === 1 ? 2 : 1)) {
+    fail_('The other team for this match hasn\'t been decided yet.');
   }
   const winner = teams.find(t => t.teamId === winnerId);
   if (!winner) fail_('That team no longer exists.');
@@ -617,7 +746,7 @@ function advanceTeam_(p) {
 
   const now = new Date();
   match.winnerId = winnerId;
-  let loserName = 'BYE';
+  let loserName = 'Unassigned';
   if (loserId) {
     const loser = teams.find(t => t.teamId === loserId);
     if (loser) {
@@ -629,10 +758,79 @@ function advanceTeam_(p) {
   const next = rounds[r + 1][Math.floor(m / 2)];
   next[m % 2 === 0 ? 'team1Id' : 'team2Id'] = winnerId;
 
+  // Moving on to another match means checking in again; remember who was in so an undo can restore it.
+  if (r + 1 < rounds.length - 1) {
+    const players = readTable_(S.PLAYERS);
+    const wasIn = [];
+    players.forEach(pl => {
+      if (pl.teamId === winnerId && pl.checkedIn) {
+        wasIn.push(pl.playerId);
+        pl.checkedIn = false;
+        pl.updatedAt = now;
+      }
+    });
+    PropertiesService.getScriptProperties().setProperty(checkInSnapshotKey_(r, m), JSON.stringify(wasIn));
+    if (wasIn.length) writeTable_(S.PLAYERS, players);
+  }
+
   writeTable_(S.TEAMS, teams);
   writeBracket_(rounds, teams);
   log_('bracket:advance', bracketLabel_(r, rounds.length) + ' match ' + (m + 1) + ': ' + winner.name + ' def. ' + loserName);
   return {};
+}
+
+function undoAdvance_(p) {
+  const teams = readTable_(S.TEAMS);
+  const rounds = getBracket_(teams);
+  const r = Number(p.round), m = Number(p.pos);
+  const match = rounds[r] && rounds[r][m];
+  if (!match || r >= rounds.length - 1) fail_('Invalid match.');
+  if (!match.winnerId) fail_('That match has no result to undo.');
+
+  const winnerId = match.winnerId;
+  const winner = teams.find(t => t.teamId === winnerId);
+  const next = rounds[r + 1][Math.floor(m / 2)];
+  if (next.winnerId) {
+    fail_('"' + (winner ? winner.name : 'That team') + '" has already played its next match. Undo that result first.');
+  }
+  const key = m % 2 === 0 ? 'team1Id' : 'team2Id';
+  if (next[key] === winnerId) next[key] = '';
+  match.winnerId = '';
+
+  const now = new Date();
+  const loserId = match.team1Id === winnerId ? match.team2Id : match.team1Id;
+  const loser = loserId && teams.find(t => t.teamId === loserId);
+  if (loser) {
+    loser.eliminated = false;
+    loser.updatedAt = now;
+  }
+
+  const props = PropertiesService.getScriptProperties();
+  const snapKey = checkInSnapshotKey_(r, m);
+  const snap = props.getProperty(snapKey);
+  if (snap) {
+    const wasIn = {};
+    JSON.parse(snap).forEach(id => { wasIn[id] = true; });
+    const players = readTable_(S.PLAYERS);
+    players.forEach(pl => {
+      if (wasIn[pl.playerId] && pl.teamId === winnerId) {
+        pl.checkedIn = true;
+        pl.updatedAt = now;
+      }
+    });
+    writeTable_(S.PLAYERS, players);
+    props.deleteProperty(snapKey);
+  }
+
+  writeTable_(S.TEAMS, teams);
+  const stillPlaying = rounds.some(round => round.some(x => x.winnerId));
+  writeBracket_(stillPlaying ? rounds : computeBracket_(teams), teams);
+  log_('bracket:undo', bracketLabel_(r, rounds.length) + ' match ' + (m + 1) + ': result for ' + (winner ? winner.name : winnerId) + ' undone');
+  return {};
+}
+
+function checkInSnapshotKey_(r, m) {
+  return 'checkInSnapshot:R' + (r + 1) + '-M' + (m + 1);
 }
 
 function timerAction_(p) {
@@ -678,7 +876,11 @@ function timerAction_(p) {
  *  BRACKET
  * ========================================================================== */
 
-/** Single-elimination layout, seeded in Teams-sheet order. Mirrors the site's original logic. */
+/**
+ * Single-elimination layout in Teams-sheet order (mirrored in index.html).
+ * Every first-round match gets one team before any gets a second, so open
+ * slots are spread out and no match is ever empty on both sides.
+ */
 function computeBracket_(teams) {
   const teamCount = Math.max(2, teams.length);
   const numRounds = Math.ceil(Math.log2(teamCount)) + 1; // last "round" is the champion slot
@@ -689,11 +891,31 @@ function computeBracket_(teams) {
     for (let m = 0; m < count; m++) round.push({ round: r, pos: m, team1Id: '', team2Id: '', winnerId: '' });
     rounds.push(round);
   }
+  const first = rounds[0];
   teams.forEach((t, i) => {
-    const match = rounds[0][Math.floor(i / 2)];
-    if (match) match[i % 2 === 0 ? 'team1Id' : 'team2Id'] = t.teamId;
+    if (i < first.length) first[i].team1Id = t.teamId;
+    else if (i < first.length * 2) first[i - first.length].team2Id = t.teamId;
   });
   return rounds;
+}
+
+function bracketStarted_() {
+  return readTable_(S.BRACKET).some(r => r.winnerId);
+}
+
+/** True while a slot is still waiting on an undecided match that has teams in it (shown as "TBD"). */
+function slotPending_(rounds, r, m, slot) {
+  if (r === 0) return false;
+  const fm = 2 * m + slot - 1;
+  const feeder = rounds[r - 1][fm];
+  return !!feeder && !feeder.winnerId && subtreeHasTeams_(rounds, r - 1, fm);
+}
+
+function subtreeHasTeams_(rounds, r, m) {
+  const match = rounds[r] && rounds[r][m];
+  if (!match) return false;
+  if (match.team1Id || match.team2Id) return true;
+  return r > 0 && (subtreeHasTeams_(rounds, r - 1, 2 * m) || subtreeHasTeams_(rounds, r - 1, 2 * m + 1));
 }
 
 /** Stored bracket once play has started, otherwise a fresh layout from the current teams. */
