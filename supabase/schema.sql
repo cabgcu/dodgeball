@@ -5,6 +5,9 @@
 --  It is safe to run again after edits: it creates what's missing and replaces
 --  every function, without touching existing data.
 --
+--  Note: Supabase runs API requests with `safeupdate`, which rejects any UPDATE or
+--  DELETE without a WHERE clause. Every such statement here has one (even `where true`).
+--
 --  Design
 --   • All tables live in the `app_private` schema, which the public API does not
 --     expose. The site can't read or write them directly.
@@ -303,7 +306,7 @@ begin
   num := k + 1;
   first_count := 1 << (num - 2);
 
-  delete from app_private.matches;
+  delete from app_private.matches where true;
   for r in 0 .. num - 1 loop
     cnt := case when r = num - 1 then 1 else 1 << (num - r - 2) end;
     insert into app_private.matches (round, pos) select r, g from generate_series(0, cnt - 1) g;
@@ -682,7 +685,7 @@ language plpgsql security definer set search_path = app_private, extensions as $
 begin
   if length(coalesce(new_password, '')) < 6 then raise exception 'Password must be at least 6 characters.'; end if;
   update app_private.admin_config set password_hash = extensions.crypt(new_password, extensions.gen_salt('bf')), login_failures = 0, locked_until = null where id = 1;
-  delete from app_private.admin_sessions;
+  delete from app_private.admin_sessions where true;
   perform app_private.log('admin:password', 'Admin password changed (all admin sessions signed out)', 'sql');
   return 'Admin password updated.';
 end $$;
@@ -696,13 +699,13 @@ language plpgsql as $$
 declare k text := p->>'key'; v text := p->>'value'; n int;
 begin
   if k in ('registrationOpen', 'waitlistOpen') then
-    if k = 'registrationOpen' then update app_private.settings set registration_open = v::boolean;
-    else update app_private.settings set waitlist_open = v::boolean; end if;
+    if k = 'registrationOpen' then update app_private.settings set registration_open = v::boolean where id = 1;
+    else update app_private.settings set waitlist_open = v::boolean where id = 1; end if;
   elsif k in ('maxTeamSize', 'waitlistTeamSize') then
     n := round(v::numeric);
     if n is null or n < 1 or n > 50 then perform app_private.fail(k || ' must be between 1 and 50.'); end if;
-    if k = 'maxTeamSize' then update app_private.settings set max_team_size = n;
-    else update app_private.settings set waitlist_team_size = n; end if;
+    if k = 'maxTeamSize' then update app_private.settings set max_team_size = n where id = 1;
+    else update app_private.settings set waitlist_team_size = n where id = 1; end if;
   else
     perform app_private.fail('Unknown setting: ' || coalesce(k, ''));
   end if;
@@ -814,8 +817,8 @@ create or replace function app_private.reset_bracket(p jsonb) returns jsonb
 language plpgsql as $$
 begin
   update app_private.teams set eliminated = false, updated_at = now() where eliminated;
-  delete from app_private.matches;
-  delete from app_private.checkin_snapshots;
+  delete from app_private.matches where true;
+  delete from app_private.checkin_snapshots where true;
   perform app_private.rebuild_bracket();
   perform app_private.log('bracket:reset', 'All match progress cleared, all teams reinstated');
   return '{}'::jsonb;
