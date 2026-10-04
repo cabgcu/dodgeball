@@ -165,6 +165,7 @@ const ROUTES = {
   logout:          { fn: logout_ },
   setSetting:      { fn: setSetting_,      write: true, admin: true },
   processWaitlist: { fn: processWaitlist_, write: true, admin: true },
+  fillTeam:        { fn: fillTeam_,        write: true, admin: true },
   resetBracket:    { fn: resetBracket_,    write: true, admin: true },
   addTeam:         { fn: addTeam_,         write: true, admin: true },
   addPlayer:       { fn: addPlayer_,       write: true, admin: true },
@@ -615,6 +616,52 @@ function processWaitlist_() {
   syncBracket_(teams);
   log_('waitlist:process', log.join(' | ') || 'No changes');
   return { log: log, remaining: unassigned.length };
+}
+
+/**
+ * Moves free agents onto one team, oldest sign-ups first, without going over maxTeamSize.
+ * payload: { teamId, count } fills up to `count` open spots; { teamId, playerId } places one person.
+ */
+function fillTeam_(p) {
+  const settings = getSettings_();
+  const teams = readTable_(S.TEAMS);
+  const players = readTable_(S.PLAYERS);
+  const team = teams.find(t => t.teamId === p.teamId);
+  if (!team) fail_('Team not found.');
+  if (team.eliminated) fail_('"' + team.name + '" has been eliminated.');
+
+  const teamIds = {};
+  teams.forEach(t => { teamIds[t.teamId] = true; });
+  let pool = players
+    .filter(pl => pl.status === 'Waitlist' || !teamIds[pl.teamId])
+    .sort((a, b) => toTime_(a.createdAt) - toTime_(b.createdAt));
+  const waiting = pool.length;
+  if (p.playerId) {
+    pool = pool.filter(pl => pl.playerId === p.playerId);
+    if (!pool.length) fail_('That player is no longer on the waitlist.');
+  }
+  if (!pool.length) fail_('There are no free agents on the waitlist right now.');
+
+  const roster = players.filter(pl => pl.teamId === team.teamId && pl.status !== 'Waitlist');
+  const open = settings.maxTeamSize - roster.length;
+  if (open <= 0) fail_('"' + team.name + '" is already full (' + settings.maxTeamSize + ' players).');
+
+  const requested = p.playerId ? 1 : (parseInt(p.count, 10) || open);
+  const picked = pool.slice(0, Math.max(1, Math.min(open, requested)));
+  const needsCaptain = !roster.some(pl => pl.role === 'Captain');
+  const now = new Date();
+  picked.forEach((pl, i) => {
+    pl.teamId = team.teamId;
+    pl.teamName = team.name;
+    pl.status = 'Rostered';
+    pl.role = needsCaptain && i === 0 ? 'Captain' : 'Player';
+    pl.checkedIn = false;
+    pl.updatedAt = now;
+  });
+
+  writeTable_(S.PLAYERS, players);
+  log_('waitlist:fillTeam', team.name + ' ← ' + picked.map(pl => pl.name).join(', '));
+  return { added: picked.map(pl => pl.name), teamName: team.name, openLeft: open - picked.length, remaining: waiting - picked.length };
 }
 
 function resetBracket_() {
