@@ -359,20 +359,116 @@
     </div>
 
     <script>
+        // ============================================================
+        //  BACKEND CONFIG
+        //  Paste your Google Apps Script Web App URL (ends in /exec).
+        //  See apps-script/Code.gs for the one-time setup steps.
+        // ============================================================
+        const API_URL = '';
+        const POLL_MS = 5000;
+
         const AppState = {
             currentMode: 'create',
             teams: [],
             waitlist: [],
+            waitlistCount: 0,
             settings: {
                 registrationOpen: true,
-                waitlistOpen: false
+                waitlistOpen: false,
+                maxTeamSize: 10,
+                waitlistTeamSize: 6
             },
-            timers: [
-                { name: "Court 1", timeRemaining: 600, defaultTime: 600, isRunning: false, intervalId: null },
-                { name: "Court 2", timeRemaining: 600, defaultTime: 600, isRunning: false, intervalId: null },
-                { name: "Court 3", timeRemaining: 600, defaultTime: 600, isRunning: false, intervalId: null }
-            ]
+            bracket: [],
+            timers: [],
+            adminToken: null,
+            clockOffset: 0,
+            busy: false,
+            loaded: false
         };
+
+        let requestSeq = 0;
+        let appliedSeq = 0;
+        const timerAlerts = {};
+
+        function esc(value) {
+            return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        // ---------- API ----------
+
+        async function api(action, payload = {}, { silent = false } = {}) {
+            if (!API_URL) {
+                if (!silent) showModal("Backend Not Connected", "Set <b>API_URL</b> in index.html to your Google Apps Script Web App URL.");
+                throw new Error('NO_API');
+            }
+            const seq = ++requestSeq;
+            let res;
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action, payload, token: AppState.adminToken })
+                });
+                res = await response.json();
+            } catch (err) {
+                if (!silent) showModal("Connection Problem", "Could not reach the tournament server. Check your connection and try again.");
+                throw err;
+            }
+            if (!res.ok) {
+                if (res.code === 'AUTH' && AppState.adminToken) clearAdminSession();
+                if (!silent) showModal(res.code === 'AUTH' ? "Access Denied" : "Heads Up", esc(res.error));
+                throw new Error(res.error);
+            }
+            if (res.state && seq >= appliedSeq) {
+                appliedSeq = seq;
+                applyState(res.state);
+            }
+            return res;
+        }
+
+        async function loadState() {
+            if (!API_URL) return;
+            try { await api('getState', {}, { silent: true }); } catch (e) { /* retry on next poll */ }
+        }
+
+        async function adminAction(action, payload = {}) {
+            try {
+                return await api(action, payload);
+            } catch (e) {
+                loadState();
+                return null;
+            }
+        }
+
+        function teamById(id) {
+            return id ? (AppState.teams.find(t => t.id === id) || null) : null;
+        }
+
+        function applyState(state) {
+            AppState.clockOffset = state.serverTime - Date.now();
+            AppState.settings = state.settings;
+            AppState.teams = state.teams.map(t => ({ ...t, players: t.players || [] }));
+            AppState.waitlist = state.waitlist || [];
+            AppState.waitlistCount = state.waitlistCount || 0;
+            AppState.bracket = (state.bracket || []).map(round => round.map(m => ({
+                round: m.round, pos: m.pos,
+                team1: teamById(m.team1Id), team2: teamById(m.team2Id), winner: teamById(m.winnerId)
+            })));
+            AppState.timers = state.timers || [];
+            AppState.loaded = true;
+
+            if (!state.isAdmin && AppState.adminToken) clearAdminSession();
+
+            renderSettings();
+            updateAllBrackets();
+            if (!document.getElementById('admin-dashboard-area').classList.contains('hidden')) {
+                renderAdminDashboard();
+            } else {
+                renderTimers();
+            }
+        }
+
+        // ---------- UI helpers ----------
 
         function showModal(title, body, actionsHtml = null) {
             document.getElementById('modal-title').innerHTML = title;
@@ -393,7 +489,7 @@
             document.getElementById('view-register').classList.add('hidden');
             document.getElementById('view-bracket').classList.add('hidden');
             document.getElementById('view-admin').classList.add('hidden');
-            
+
             document.getElementById('tab-register').className = "px-4 sm:px-6 py-3 rounded-t-lg bg-slate-200 text-slate-600 font-medium hover:bg-slate-300 focus:outline-none transition-all border-t-4 border-transparent";
             document.getElementById('tab-bracket').className = "px-4 sm:px-6 py-3 rounded-t-lg bg-slate-200 text-slate-600 font-medium hover:bg-slate-300 focus:outline-none transition-all border-t-4 border-transparent";
             document.getElementById('tab-admin').className = "px-4 sm:px-6 py-3 rounded-t-lg bg-slate-200 text-slate-600 font-medium hover:bg-slate-300 focus:outline-none transition-all border-t-4 border-transparent flex items-center gap-2 shadow-sm";
@@ -404,11 +500,12 @@
             } else if (view === 'bracket') {
                 document.getElementById('view-bracket').classList.remove('hidden');
                 document.getElementById('tab-bracket').className = "px-4 sm:px-6 py-3 rounded-t-lg bg-white shadow-md text-brand-600 font-bold border-t-4 border-brand-600 focus:outline-none transition-all";
-                tryRebuildBracket();
                 updateAllBrackets();
+                loadState();
             } else if (view === 'admin') {
                 document.getElementById('view-admin').classList.remove('hidden');
                 document.getElementById('tab-admin').className = "px-4 sm:px-6 py-3 rounded-t-lg bg-slate-800 text-white font-medium hover:bg-slate-700 focus:outline-none transition-all border-t-4 border-transparent flex items-center gap-2 shadow-lg border-slate-600";
+                if (AppState.adminToken) showAdminDashboard();
             }
         }
 
@@ -420,7 +517,7 @@
             document.getElementById('roster-section').classList.remove('hidden');
             document.getElementById('section-title-captain').innerText = "Player Information";
             document.getElementById('submitBtn').innerText = "Register";
-            
+
             document.getElementById('btn-create-team').className = "px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200";
             document.getElementById('btn-join-team').className = "px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200";
             document.getElementById('btn-free-agent').className = "px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200";
@@ -435,7 +532,7 @@
             } else if (mode === 'join') {
                 document.getElementById('join-team-fields').classList.remove('hidden');
                 document.getElementById('btn-join-team').className = "px-5 py-2.5 rounded-md text-sm font-semibold transition-all bg-brand-600 text-white shadow-md hover:bg-brand-700";
-                document.getElementById('roster-section').classList.add('hidden'); 
+                document.getElementById('roster-section').classList.add('hidden');
                 document.getElementById('submitBtn').innerText = "Join Team";
                 document.getElementById('teamName').required = false;
                 document.getElementById('joinTeamCode').required = true;
@@ -449,8 +546,33 @@
             }
         }
 
+        function renderSettings() {
+            const regOpen = AppState.settings.registrationOpen;
+            const wlOpen = AppState.settings.waitlistOpen;
+
+            document.getElementById('status-reg').innerText = regOpen ? 'OPEN' : 'CLOSED';
+            document.getElementById('status-reg').className = regOpen ? 'text-2xl font-black text-green-400' : 'text-2xl font-black text-red-400';
+            document.getElementById('status-waitlist').innerText = wlOpen ? 'OPEN' : 'CLOSED';
+            document.getElementById('status-waitlist').className = wlOpen ? 'text-2xl font-black text-green-400' : 'text-2xl font-black text-red-400';
+
+            document.getElementById('btn-create-team').style.display = regOpen ? '' : 'none';
+            document.getElementById('btn-join-team').style.display = regOpen ? '' : 'none';
+            document.getElementById('btn-free-agent').style.display = wlOpen ? 'block' : 'none';
+
+            // Free agents can still sign up while team registration is closed.
+            const formAvailable = regOpen || wlOpen;
+            const succeeded = !document.getElementById('success-message').classList.contains('hidden');
+            document.getElementById('registration-closed-msg').classList.toggle('hidden', formAvailable);
+            document.getElementById('registration-form-area').classList.toggle('hidden', !formAvailable || succeeded);
+
+            if (!AppState.busy) {
+                if (!regOpen && wlOpen && AppState.currentMode !== 'freeplay') setMode('freeplay');
+                else if (regOpen && !wlOpen && AppState.currentMode === 'freeplay') setMode('create');
+            }
+        }
+
         function generateTeamCode() {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
             let code = '';
             for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
             document.getElementById('generated-team-code').innerText = code;
@@ -463,7 +585,7 @@
                 showModal("Limit Reached", "You can only add up to 9 additional players (10 total including captain).");
                 return;
             }
-            
+
             const div = document.createElement('div');
             div.className = "flex flex-col md:flex-row gap-3 items-start md:items-center bg-slate-50 p-3 rounded border border-slate-200 fade-in";
             div.innerHTML = `
@@ -496,93 +618,64 @@
             }
         }
 
-        function submitForm(e) {
+        function setBusy(busy, label) {
+            AppState.busy = busy;
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = busy;
+            btn.classList.toggle('opacity-60', busy);
+            btn.classList.toggle('cursor-wait', busy);
+            if (busy) btn.innerText = label;
+            else setMode(AppState.currentMode);
+        }
+
+        async function submitForm(e) {
             e.preventDefault();
-            
-            if(AppState.currentMode !== 'freeplay' && !AppState.settings.registrationOpen) {
+            if (AppState.busy) return;
+
+            const mode = AppState.currentMode;
+            if (mode !== 'freeplay' && !AppState.settings.registrationOpen) {
                 showModal("Registration Closed", "General registration is currently closed.");
                 return;
             }
-            if(AppState.currentMode === 'freeplay' && !AppState.settings.waitlistOpen) {
+            if (mode === 'freeplay' && !AppState.settings.waitlistOpen) {
                 showModal("Waitlist Closed", "The waitlist is currently closed.");
                 return;
             }
 
             const formData = new FormData(e.target);
-            const mode = AppState.currentMode;
-            
-            const capEmail = formData.get('captainEmail_real') || formData.get('captainEmail');
-            let isElim = false;
-            AppState.teams.forEach(t => {
-                if (t.eliminated && t.players.some(p => p.email && p.email.toLowerCase() === capEmail.toLowerCase())) {
-                    isElim = true;
+            const payload = {
+                mode,
+                player: {
+                    name: formData.get('captainName'),
+                    phone: formData.get('captainPhone'),
+                    email: formData.get('captainEmail_real') || formData.get('captainEmail'),
+                    studentId: formData.get('captainId_real') || formData.get('captainId')
                 }
-            });
-            if (isElim) {
-                showModal("Eligibility Error", `The email <b>${capEmail}</b> belongs to a player on an eliminated team. You cannot register or join another team.`);
-                return;
-            }
-
-            const newPlayer = {
-                name: formData.get('captainName'),
-                phone: formData.get('captainPhone'),
-                email: capEmail,
-                id: formData.get('captainId_real') || formData.get('captainId'),
-                role: mode === 'create' ? 'Captain' : 'Player',
-                checkedIn: false
             };
 
             if (mode === 'create') {
-                const teamName = formData.get('teamName');
-                const teamCode = formData.get('teamCode');
-                let players = [newPlayer];
-                
                 const names = formData.getAll('playerName[]');
                 const emails = formData.getAll('playerEmail[]');
                 const roles = formData.getAll('playerRole[]');
-                
-                for(let i = 0; i < names.length; i++) {
-                    if(names[i].trim() !== '') {
-                        players.push({
-                            name: names[i], email: emails[i], id: '', role: roles[i], checkedIn: false
-                        });
-                    }
-                }
-                
-                AppState.teams.push({
-                    id: 'team_' + Date.now(),
-                    name: teamName,
-                    code: teamCode,
-                    eliminated: false,
-                    players: players
-                });
-                
-                document.getElementById('success-desc').innerText = `Your team "${teamName}" has been created! Share your code (${teamCode}) with teammates so they can join.`;
-                
+                payload.teamName = formData.get('teamName');
+                payload.teamCode = formData.get('teamCode');
+                payload.roster = names
+                    .map((name, i) => ({ name, email: emails[i], role: roles[i] }))
+                    .filter(p => p.name.trim() !== '');
             } else if (mode === 'join') {
-                const joinCode = formData.get('joinTeamCode').toUpperCase();
-                const team = AppState.teams.find(t => t.code.toUpperCase() === joinCode);
-                
-                if (!team) {
-                    showModal("Team Not Found", `We couldn't find a team with the code <b>${joinCode}</b>. Please check and try again.`);
-                    return;
-                }
-                
-                team.players.push(newPlayer);
-                document.getElementById('success-desc').innerText = `You have successfully joined "${team.name}"!`;
-                
-            } else if (mode === 'freeplay') {
-                AppState.waitlist.push(newPlayer);
-                document.getElementById('success-desc').innerText = `You have been added to the waitlist! We will place you on a team if spots become available.`;
+                payload.teamCode = (formData.get('joinTeamCode') || '').trim().toUpperCase();
             }
 
-            document.getElementById('registration-form-area').classList.add('hidden');
-            document.getElementById('success-message').classList.remove('hidden');
-            
-            tryRebuildBracket();
-            updateAllBrackets();
-            if(!document.getElementById('view-admin').classList.contains('hidden')) {
-                renderAdminDashboard();
+            setBusy(true, "Submitting...");
+            try {
+                const res = await api('register', payload);
+                document.getElementById('success-desc').innerText = res.message;
+                document.getElementById('registration-form-area').classList.add('hidden');
+                document.getElementById('success-message').classList.remove('hidden');
+            } catch (err) {
+                // api() already showed the error
+            } finally {
+                setBusy(false);
             }
         }
 
@@ -591,19 +684,22 @@
             document.getElementById('players-container').innerHTML = '';
             addPlayerField(); addPlayerField();
             generateTeamCode();
-            
-            document.getElementById('registration-form-area').classList.remove('hidden');
+
             document.getElementById('success-message').classList.add('hidden');
-            
+
             const realInputs = document.querySelectorAll('[type="password"]');
             realInputs.forEach(i => { i.type = "text"; i.dataset.real = ""; });
+            renderSettings();
         }
 
+        // ---------- Bracket ----------
+
+        // Empty placeholder layout shown before the server responds.
         function buildBracketData() {
             const activeTeams = AppState.teams;
             const teamCount = Math.max(2, activeTeams.length);
-            const numRounds = Math.ceil(Math.log2(teamCount)) + 1; 
-            
+            const numRounds = Math.ceil(Math.log2(teamCount)) + 1;
+
             let matches = [];
             for (let r = 0; r < numRounds; r++) {
                 let roundMatches = [];
@@ -622,13 +718,6 @@
             AppState.bracket = matches;
         }
 
-        function tryRebuildBracket() {
-            let hasStarted = AppState.bracket && AppState.bracket.some(r => r.some(m => m.winner));
-            if (!hasStarted) {
-                buildBracketData();
-            }
-        }
-
         function updateAllBrackets() {
             renderBracket('bracket-canvas', 'bracket-headers', false, false);
             if (document.getElementById('admin-bracket-canvas')) {
@@ -640,28 +729,11 @@
         }
 
         function advanceTeam(r, m, teamSlot) {
-            let match = AppState.bracket[r][m];
+            let match = AppState.bracket[r] && AppState.bracket[r][m];
+            if (!match) return;
             let winningTeam = teamSlot === 1 ? match.team1 : match.team2;
-            let losingTeam = teamSlot === 1 ? match.team2 : match.team1;
-            
-            if (!winningTeam || winningTeam === "BYE") return;
-
-            if (losingTeam) {
-                let realLosingTeam = AppState.teams.find(t => t.id === losingTeam.id);
-                if(realLosingTeam) realLosingTeam.eliminated = true;
-            }
-            
-            match.winner = winningTeam;
-            
-            if (r < AppState.bracket.length - 1) {
-                let nextRound = r + 1;
-                let nextMatch = Math.floor(m / 2);
-                let nextSlot = m % 2 === 0 ? 'team1' : 'team2';
-                AppState.bracket[nextRound][nextMatch][nextSlot] = winningTeam;
-            }
-
-            updateAllBrackets();
-            renderAdminDashboard();
+            if (!winningTeam) return;
+            adminAction('advanceTeam', { round: r, pos: m, slot: teamSlot });
         }
 
         function renderBracket(canvasId, headersId, isAdmin = false, isProjector = false) {
@@ -671,20 +743,20 @@
             canvas.innerHTML = ''; headers.innerHTML = '';
 
             if (!AppState.bracket || AppState.bracket.length === 0) buildBracketData();
-            
+
             let matches = AppState.bracket;
             let numRounds = matches.length;
 
             headers.className = "flex w-full mb-6 relative";
             const minBracketWidth = numRounds * 260; // Increased to give match cards breathing room
             headers.style.minWidth = minBracketWidth + 'px';
-            
+
             const colWidth = 100 / numRounds;
             for (let r = 0; r < numRounds; r++) {
                 let headerText = "Round " + (r + 1);
                 if (r === numRounds - 2) headerText = "Finals";
                 if (r === numRounds - 1) headerText = "Champion";
-                
+
                 let div = document.createElement('div');
                 div.className = `text-center font-black uppercase tracking-widest text-sm ${isProjector || isAdmin ? 'text-slate-500' : 'text-slate-400'}`;
                 div.style.width = colWidth + '%';
@@ -695,12 +767,12 @@
             canvas.className = "relative w-full min-h-[500px]";
             canvas.style.minWidth = minBracketWidth + 'px';
             const matchHeight = 110; // Increased spacing so matches don't squash
-            
+
             for (let r = 0; r < numRounds; r++) {
                 let roundMatches = matches[r];
                 let roundWidth = 100 / numRounds;
                 let leftPos = r * roundWidth;
-                
+
                 for (let m = 0; m < roundMatches.length; m++) {
                     let match = roundMatches[m];
                     let spacing = Math.pow(2, r) * matchHeight;
@@ -712,25 +784,25 @@
                     mDiv.style.left = leftPos + '%';
                     mDiv.style.top = topPos + 'px';
                     mDiv.style.width = roundWidth + '%';
-                    
+
                     if (r < numRounds - 1) {
-                        let t1Name = match.team1 ? match.team1.name : (r===0 ? "BYE" : "TBD");
-                        let t2Name = match.team2 ? match.team2.name : (r===0 ? "BYE" : "TBD");
-                        
-                        let isT1Elim = match.team1 && AppState.teams.find(t=>t.id===match.team1.id)?.eliminated;
-                        let isT2Elim = match.team2 && AppState.teams.find(t=>t.id===match.team2.id)?.eliminated;
-                        
+                        let t1Name = esc(match.team1 ? match.team1.name : (r===0 ? "BYE" : "TBD"));
+                        let t2Name = esc(match.team2 ? match.team2.name : (r===0 ? "BYE" : "TBD"));
+
+                        let isT1Elim = match.team1 && match.team1.eliminated;
+                        let isT2Elim = match.team2 && match.team2.eliminated;
+
                         let t1Classes = `px-3 py-2 border-b text-sm font-bold truncate transition-colors `;
                         let t2Classes = `px-3 py-2 text-sm font-bold truncate transition-colors `;
-                        
+
                         // Clickable styles for Admin
                         if (isAdmin && match.team1 && !isT1Elim) t1Classes += ` cursor-pointer hover:bg-brand-600 hover:text-white `;
                         if (isAdmin && match.team2 && !isT2Elim) t2Classes += ` cursor-pointer hover:bg-brand-600 hover:text-white `;
-                        
+
                         if (isT1Elim) t1Classes += ` text-slate-400 line-through bg-slate-100 `;
                         else if (!isAdmin && !isProjector) t1Classes += ` text-slate-800 `;
-                        else t1Classes += ` text-slate-200 `; 
-                        
+                        else t1Classes += ` text-slate-200 `;
+
                         if (isT2Elim) t2Classes += ` text-slate-400 line-through bg-slate-100 `;
                         else if (!isAdmin && !isProjector) t2Classes += ` text-slate-800 `;
                         else t2Classes += ` text-slate-200 `;
@@ -751,7 +823,7 @@
                             </div>
                         `;
                     } else {
-                        let champName = match.team1 ? match.team1.name : "TBD";
+                        let champName = esc(match.team1 ? match.team1.name : "TBD");
                         mDiv.innerHTML = `
                             <div class="bg-brand-600 rounded-lg shadow-xl border-2 border-brand-400 p-4 w-[90%] text-center flex flex-col items-center justify-center fade-in">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-yellow-300 mb-1" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 011.233.393l1.109 2.118a1 1 0 01-.157 1.258l-1.895 2.052a1 1 0 01-.159 1.135l1.624 3.033a1 1 0 01-1.42 1.272l-4.103-2.463A1 1 0 0110 15H5a1 1 0 01-1-1v-2H2a1 1 0 01-.98-1.196l1.326-6.627A1 1 0 013.313 3.3l1.83.61L8.85 1.4A1 1 0 0110 2z" clip-rule="evenodd" /></svg>
@@ -763,8 +835,6 @@
                     if (r < numRounds - 1) {
                         let lineDiv = document.createElement('div');
                         let isTopBranch = m % 2 === 0;
-                        let lineH = Math.pow(2, r-1) * matchHeight;
-                        if(r===0) lineH = matchHeight / 2;
 
                         lineDiv.className = `absolute right-0 w-[10%] border-r-2 ${(isProjector || isAdmin) ? 'border-slate-600' : 'border-slate-300'}`;
                         if(isTopBranch) {
@@ -789,33 +859,50 @@
             canvas.style.height = (matches[0].length * matchHeight + 100) + 'px';
         }
 
-        function handleAdminLogin(e) {
+        // ---------- Admin ----------
+
+        async function handleAdminLogin(e) {
             e.preventDefault();
-            const pw = document.getElementById('admin-password').value;
-            if (pw === 'Cabgcu49!') {
-                document.getElementById('admin-login-area').classList.add('hidden');
-                document.getElementById('admin-dashboard-area').classList.remove('hidden');
-                document.getElementById('admin-password').value = '';
-                renderAdminDashboard();
-            } else {
-                showModal("Access Denied", "Incorrect admin password.");
+            const input = document.getElementById('admin-password');
+            const password = input.value;
+            input.value = '';
+            try {
+                const res = await api('login', { password });
+                AppState.adminToken = res.token;
+                try { sessionStorage.setItem('dbAdminToken', res.token); } catch (err) {}
+                showAdminDashboard();
+            } catch (err) {
+                // api() already showed the error
             }
         }
 
-        function logoutAdmin() {
+        function showAdminDashboard() {
+            document.getElementById('admin-login-area').classList.add('hidden');
+            document.getElementById('admin-dashboard-area').classList.remove('hidden');
+            renderAdminDashboard();
+        }
+
+        function clearAdminSession() {
+            AppState.adminToken = null;
+            try { sessionStorage.removeItem('dbAdminToken'); } catch (err) {}
             document.getElementById('admin-dashboard-area').classList.add('hidden');
             document.getElementById('admin-login-area').classList.remove('hidden');
+        }
+
+        function logoutAdmin() {
+            if (AppState.adminToken) api('logout', {}, { silent: true }).catch(() => {});
+            clearAdminSession();
         }
 
         function switchAdminTab(tab) {
             document.getElementById('admin-tab-settings').classList.add('hidden');
             document.getElementById('admin-tab-roster').classList.add('hidden');
-            
+
             document.querySelectorAll('.admin-tab-btn').forEach(btn => {
                 btn.classList.remove('bg-slate-800', 'text-white', 'shadow-sm', 'border-slate-700');
                 btn.classList.add('text-slate-400');
             });
-            
+
             document.getElementById('admin-tab-' + tab).classList.remove('hidden');
             let activeBtn = document.getElementById('nav-' + tab);
             activeBtn.classList.remove('text-slate-400');
@@ -823,99 +910,47 @@
         }
 
         function toggleRegistration() {
-            AppState.settings.registrationOpen = !AppState.settings.registrationOpen;
-            const open = AppState.settings.registrationOpen;
-            document.getElementById('status-reg').innerText = open ? 'OPEN' : 'CLOSED';
-            document.getElementById('status-reg').className = open ? 'text-2xl font-black text-green-400' : 'text-2xl font-black text-red-400';
-            
-            if (open) {
-                document.getElementById('registration-closed-msg').classList.add('hidden');
-                document.getElementById('registration-form-area').classList.remove('hidden');
-            } else {
-                document.getElementById('registration-closed-msg').classList.remove('hidden');
-                document.getElementById('registration-form-area').classList.add('hidden');
-            }
+            adminAction('setSetting', { key: 'registrationOpen', value: !AppState.settings.registrationOpen });
         }
 
         function toggleWaitlist() {
-            AppState.settings.waitlistOpen = !AppState.settings.waitlistOpen;
-            const open = AppState.settings.waitlistOpen;
-            document.getElementById('status-waitlist').innerText = open ? 'OPEN' : 'CLOSED';
-            document.getElementById('status-waitlist').className = open ? 'text-2xl font-black text-green-400' : 'text-2xl font-black text-red-400';
-            document.getElementById('btn-free-agent').style.display = open ? 'block' : 'none';
+            adminAction('setSetting', { key: 'waitlistOpen', value: !AppState.settings.waitlistOpen });
         }
 
-        function processWaitlist() {
-            if (AppState.waitlist.length === 0) {
+        async function processWaitlist() {
+            if (AppState.waitlistCount === 0) {
                 showModal("Waitlist Empty", "There are no free agents on the waitlist right now.");
                 return;
             }
 
-            let log = [];
-            let unassigned = [...AppState.waitlist];
-            
-            AppState.teams.forEach(team => {
-                while (team.players.length < 6 && unassigned.length > 0) {
-                    let p = unassigned.shift();
-                    p.role = 'Player';
-                    team.players.push(p);
-                    log.push(`Assigned <b>${p.name}</b> to ${team.name}`);
-                }
-            });
+            const res = await adminAction('processWaitlist');
+            if (!res) return;
 
-            while (unassigned.length >= 6) {
-                let newTeamPlayers = unassigned.splice(0, 6);
-                newTeamPlayers[0].role = 'Captain'; 
-                
-                const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-                let teamName = "Waitlist Team " + (Math.floor(Math.random() * 1000));
-                
-                AppState.teams.push({
-                    id: 'team_' + Date.now() + Math.random(), name: teamName, code: code, eliminated: false, players: newTeamPlayers
-                });
-                
-                log.push(`Created new team <b>${teamName}</b> with 6 free agents.`);
-            }
+            let message = res.log.length > 0
+                ? `<ul class="list-disc list-inside text-sm text-left space-y-1 mb-4 text-slate-600 bg-slate-50 p-4 rounded-lg border border-slate-200"><li>${res.log.map(esc).join('</li><li>')}</li></ul><p class="text-xs text-slate-500">Remaining on waitlist: ${res.remaining}</p>`
+                : `Not enough waitlist players to form a new team (${AppState.settings.waitlistTeamSize} required), and all existing teams have at least ${AppState.settings.waitlistTeamSize} players.`;
 
-            AppState.waitlist = unassigned;
-            renderAdminDashboard();
-            tryRebuildBracket();
-            updateAllBrackets();
-            
-            let message = log.length > 0 
-                ? `<ul class="list-disc list-inside text-sm text-left space-y-1 mb-4 text-slate-600 bg-slate-50 p-4 rounded-lg border border-slate-200"><li>${log.join('</li><li>')}</li></ul><p class="text-xs text-slate-500">Remaining on waitlist: ${AppState.waitlist.length}</p>` 
-                : "Not enough waitlist players to form a new team (6 required), and all existing teams have at least 6 players.";
-            
             showModal("Waitlist Processed", message);
         }
 
         function confirmResetBracket() {
-            showModal("Reset Bracket?", "Are you sure you want to reset the entire bracket? This will remove all match progress and un-eliminate all teams.", 
+            showModal("Reset Bracket?", "Are you sure you want to reset the entire bracket? This will remove all match progress and un-eliminate all teams.",
             `<button onclick="resetBracket()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold shadow">Yes, Reset</button>`);
         }
 
-        function resetBracket() {
-            AppState.teams.forEach(t => t.eliminated = false);
-            buildBracketData(); // Force full rebuild
-            updateAllBrackets();
-            renderAdminDashboard();
+        async function resetBracket() {
             closeModal();
-            showModal("Bracket Reset", "The bracket has been successfully reset.");
+            const res = await adminAction('resetBracket');
+            if (res) showModal("Bracket Reset", "The bracket has been successfully reset.");
         }
 
         function addEmptyTeam() {
-            const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-            AppState.teams.push({
-                id: 'team_' + Date.now(), name: "New Blank Team", code: code, eliminated: false, players: []
-            });
-            renderAdminDashboard();
-            tryRebuildBracket();
-            updateAllBrackets();
+            adminAction('addTeam');
         }
 
         function renderAdminDashboard() {
             document.getElementById('status-teamcount').innerText = AppState.teams.length;
-            document.getElementById('admin-waitlist-count').innerText = AppState.waitlist.length;
+            document.getElementById('admin-waitlist-count').innerText = AppState.waitlistCount;
 
             const rosterContainer = document.getElementById('admin-roster-cards');
             rosterContainer.innerHTML = '';
@@ -925,13 +960,14 @@
                     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between py-3 border-b border-slate-700/50 last:border-0 group gap-2">
                         <div class="w-full sm:w-auto">
                             <div class="text-base font-bold text-slate-200 flex flex-wrap items-center gap-2 leading-tight">
-                                <span class="break-words whitespace-normal">${p.name}</span> 
+                                <span class="break-words whitespace-normal">${esc(p.name)}</span>
                                 ${p.role === 'Captain' ? `<span class="px-1.5 py-0.5 bg-brand-500/20 text-brand-400 text-[10px] rounded uppercase shrink-0">C</span>` : ''}
+                                ${p.role === 'Alternate' ? `<span class="px-1.5 py-0.5 bg-slate-600/40 text-slate-300 text-[10px] rounded uppercase shrink-0">Alt</span>` : ''}
                             </div>
-                            <div class="text-xs text-slate-400 mt-0.5 break-words whitespace-normal">${p.email || 'No email'} | ${p.id || 'No ID'}</div>
+                            <div class="text-xs text-slate-400 mt-0.5 break-words whitespace-normal">${esc(p.email || 'No email')} | ${esc(p.studentId || 'No ID')}</div>
                         </div>
                         <div class="flex items-center gap-2 self-end sm:self-center">
-                            <button onclick="toggleCheckIn('${team.id}', '${p.email}')" class="px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider ${p.checkedIn ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700 hover:bg-slate-600 text-slate-300 border border-slate-600'} transition-colors flex items-center gap-1 shadow-sm" title="Toggle Check-in">
+                            <button onclick="toggleCheckIn('${esc(p.playerId)}')" class="px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider ${p.checkedIn ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700 hover:bg-slate-600 text-slate-300 border border-slate-600'} transition-colors flex items-center gap-1 shadow-sm" title="Toggle Check-in">
                                 ${p.checkedIn ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg> IN' : 'CHECK IN'}
                             </button>
                         </div>
@@ -945,8 +981,8 @@
                 card.innerHTML = `
                     <div class="flex justify-between items-start mb-4 pb-3 border-b border-slate-700">
                         <div class="flex-1">
-                            <h3 class="text-lg font-black text-white leading-tight ${team.eliminated ? 'line-through text-slate-400' : ''}">${team.name}</h3>
-                            <div class="text-xs text-slate-400 font-mono mt-1">Code: ${team.code}</div>
+                            <h3 class="text-lg font-black text-white leading-tight ${team.eliminated ? 'line-through text-slate-400' : ''}">${esc(team.name)}</h3>
+                            <div class="text-xs text-slate-400 font-mono mt-1">Code: ${esc(team.code)}</div>
                         </div>
                         <div class="flex flex-col items-end gap-1">
                             <span class="text-xs font-bold px-2 py-1 bg-slate-700 text-slate-300 rounded">${team.players.length} Players</span>
@@ -958,10 +994,10 @@
                     </div>
                     <div class="flex gap-2 mt-auto pt-3 border-t border-slate-700/50 justify-between items-center">
                         <div class="flex gap-2">
-                            <button onclick="checkInTeam('${team.id}')" title="Check In All" class="text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40 border border-emerald-600/30 rounded transition-colors shadow-sm">Check In All</button>
-                            <button onclick="resetTeamCheckIn('${team.id}')" title="Reset Check-ins for this team" class="text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 border border-slate-600 rounded transition-colors shadow-sm">Reset</button>
+                            <button onclick="checkInTeam('${esc(team.id)}')" title="Check In All" class="text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40 border border-emerald-600/30 rounded transition-colors shadow-sm">Check In All</button>
+                            <button onclick="resetTeamCheckIn('${esc(team.id)}')" title="Reset Check-ins for this team" class="text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 border border-slate-600 rounded transition-colors shadow-sm">Reset</button>
                         </div>
-                        <button onclick="adminAddPlayerModal('${team.id}')" title="Manually add player to team" class="text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded transition-colors shadow-sm border border-brand-500">+ Player</button>
+                        <button onclick="adminAddPlayerModal('${esc(team.id)}')" title="Manually add player to team" class="text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded transition-colors shadow-sm border border-brand-500">+ Player</button>
                     </div>
                 `;
                 rosterContainer.appendChild(card);
@@ -969,38 +1005,41 @@
             renderTimers();
         }
 
-        function toggleCheckIn(teamId, email) {
-            let team = AppState.teams.find(t => t.id === teamId);
-            if(team) {
-                let p = team.players.find(pl => pl.email === email);
-                if(p) p.checkedIn = !p.checkedIn;
-                renderAdminDashboard();
+        function findPlayer(playerId) {
+            for (const team of AppState.teams) {
+                const p = team.players.find(pl => pl.playerId === playerId);
+                if (p) return p;
             }
+            return null;
+        }
+
+        function toggleCheckIn(playerId) {
+            const p = findPlayer(playerId);
+            if (p) { p.checkedIn = !p.checkedIn; renderAdminDashboard(); } // optimistic
+            adminAction('toggleCheckIn', { playerId });
+        }
+
+        function setTeamCheckIn(teamId, checkedIn) {
+            const team = AppState.teams.find(t => t.id === teamId);
+            if (team) { team.players.forEach(p => p.checkedIn = checkedIn); renderAdminDashboard(); } // optimistic
+            adminAction('setTeamCheckIn', { teamId, checkedIn });
         }
 
         function checkInTeam(teamId) {
-            let team = AppState.teams.find(t => t.id === teamId);
-            if(team) {
-                team.players.forEach(p => p.checkedIn = true);
-                renderAdminDashboard();
-            }
+            setTeamCheckIn(teamId, true);
         }
 
         function resetTeamCheckIn(teamId) {
-            let team = AppState.teams.find(t => t.id === teamId);
-            if(team) {
-                team.players.forEach(p => p.checkedIn = false);
-                renderAdminDashboard();
-            }
+            setTeamCheckIn(teamId, false);
         }
 
         function adminAddPlayerModal(teamId) {
             let team = AppState.teams.find(t => t.id === teamId);
             if(!team) return;
-            
+
             let content = `
                 <div class="space-y-3 mb-4 text-left">
-                    <p class="text-sm text-slate-500 mb-2">Adding player to <b>${team.name}</b></p>
+                    <p class="text-sm text-slate-500 mb-2">Adding player to <b>${esc(team.name)}</b></p>
                     <div>
                         <label class="block text-xs font-bold text-slate-700 mb-1">Full Name</label>
                         <input type="text" id="admin-new-player-name" placeholder="Enter Name" class="w-full px-3 py-2 border rounded border-slate-300 text-slate-800 text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
@@ -1023,67 +1062,64 @@
                     </div>
                 </div>
             `;
-            let actions = `<button onclick="adminSaveNewPlayer('${teamId}')" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded font-bold transition-colors shadow-sm">Add Player</button>`;
+            let actions = `<button onclick="adminSaveNewPlayer('${esc(teamId)}')" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded font-bold transition-colors shadow-sm">Add Player</button>`;
             showModal("Add Player Manually", content, actions);
         }
 
-        function adminSaveNewPlayer(teamId) {
-            let team = AppState.teams.find(t => t.id === teamId);
-            if(!team) return;
-            
+        async function adminSaveNewPlayer(teamId) {
             let name = document.getElementById('admin-new-player-name').value.trim();
             let email = document.getElementById('admin-new-player-email').value.trim();
-            let id = document.getElementById('admin-new-player-id').value.trim();
+            let studentId = document.getElementById('admin-new-player-id').value.trim();
             let role = document.getElementById('admin-new-player-role').value;
-            
-            if(!name || !email || !id) {
-                showModal("Missing Info", "Please fill out the Name, Email, and Student ID fields to add a player.", `<button onclick="adminAddPlayerModal('${teamId}')" class="px-4 py-2 bg-brand-600 text-white rounded font-bold w-full">Go Back</button>`);
+
+            if(!name || !email || !studentId) {
+                showModal("Missing Info", "Please fill out the Name, Email, and Student ID fields to add a player.", `<button onclick="adminAddPlayerModal('${esc(teamId)}')" class="px-4 py-2 bg-brand-600 text-white rounded font-bold w-full">Go Back</button>`);
                 return;
             }
-            
-            let isElim = false;
-            AppState.teams.forEach(t => {
-                if (t.eliminated && t.players.some(p => p.email && p.email.toLowerCase() === email.toLowerCase())) {
-                    isElim = true;
-                }
-            });
-            if (isElim) {
-                showModal("Not Eligible", `Player with email <b>${email}</b> is on an eliminated team and cannot be added.`);
-                return;
-            }
-            
-            team.players.push({ name: name, email: email, id: id, role: role, checkedIn: false });
-            renderAdminDashboard();
+
             closeModal();
+            await adminAction('addPlayer', { teamId, name, email, studentId, role });
+        }
+
+        // ---------- Timers (server holds the truth; clients count down locally) ----------
+
+        function timerSecondsLeft(t) {
+            if (!t.isRunning || !t.endsAt) return t.timeRemaining;
+            return Math.max(0, Math.ceil((t.endsAt - (Date.now() + AppState.clockOffset)) / 1000));
+        }
+
+        function formatTime(seconds) {
+            return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
         }
 
         function renderTimers() {
             const container = document.getElementById('timers-container');
-            if(container) {
+            // Don't rebuild while an admin is typing in a "Set Mins" box.
+            if (container && !container.contains(document.activeElement)) {
                 container.innerHTML = '';
                 AppState.timers.forEach((t, index) => {
-                    let mins = Math.floor(t.timeRemaining / 60).toString().padStart(2, '0');
-                    let secs = (t.timeRemaining % 60).toString().padStart(2, '0');
+                    let left = timerSecondsLeft(t);
+                    let running = t.isRunning && left > 0;
                     let defMins = Math.floor(t.defaultTime / 60);
-                    
+
                     let div = document.createElement('div');
                     div.className = "p-4 bg-slate-900 rounded-lg border border-slate-700 flex flex-col gap-4";
                     div.innerHTML = `
                         <div class="flex justify-between items-center border-b border-slate-800 pb-2">
-                            <span class="font-bold text-slate-300">${t.name}</span>
+                            <span class="font-bold text-slate-300">${esc(t.name)}</span>
                             <div class="flex items-center gap-1 text-xs text-slate-500">
-                                Set Mins: 
-                                <input type="number" value="${defMins}" min="1" max="60" 
-                                    onchange="updateTimerDefault(${index}, this.value)" 
+                                Set Mins:
+                                <input type="number" value="${defMins}" min="1" max="60"
+                                    onchange="updateTimerDefault(${index}, this.value)"
                                     class="w-12 bg-slate-800 border border-slate-600 rounded px-1 py-0.5 text-center text-white focus:outline-none focus:border-brand-500">
                             </div>
                         </div>
                         <div class="flex flex-col items-center gap-4">
-                            <div class="text-4xl font-mono font-bold ${t.isRunning ? 'text-brand-500' : 'text-slate-200'} tracking-wider drop-shadow-md">
-                                ${mins}:${secs}
+                            <div data-timer-admin="${index}" class="text-4xl font-mono font-bold ${running ? 'text-brand-500' : 'text-slate-200'} tracking-wider drop-shadow-md">
+                                ${formatTime(left)}
                             </div>
                             <div class="flex gap-2 w-full">
-                                ${t.isRunning 
+                                ${running
                                     ? `<button onclick="toggleTimer(${index})" class="flex-1 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold rounded shadow-sm transition">Pause</button>`
                                     : `<button onclick="toggleTimer(${index})" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded shadow-sm transition">Start</button>`
                                 }
@@ -1098,62 +1134,59 @@
             const projContainer = document.getElementById('projection-timers-container');
             if(projContainer && document.getElementById('view-projection').classList.contains('hidden') === false) {
                 projContainer.innerHTML = '';
-                AppState.timers.forEach((t) => {
-                    let mins = Math.floor(t.timeRemaining / 60).toString().padStart(2, '0');
-                    let secs = (t.timeRemaining % 60).toString().padStart(2, '0');
-                    
+                AppState.timers.forEach((t, index) => {
+                    let left = timerSecondsLeft(t);
+                    let running = t.isRunning && left > 0;
+
                     let div = document.createElement('div');
                     div.className = "flex flex-col items-center bg-slate-900/80 px-6 py-2 rounded-xl border border-slate-700 shadow-inner";
                     div.innerHTML = `
-                        <span class="text-xs font-bold text-slate-400 tracking-widest uppercase mb-1">${t.name}</span>
-                        <span class="text-5xl font-black font-mono tracking-wider ${t.isRunning ? 'text-brand-500 projector-timer' : 'text-white'}">${mins}:${secs}</span>
+                        <span class="text-xs font-bold text-slate-400 tracking-widest uppercase mb-1">${esc(t.name)}</span>
+                        <span data-timer-proj="${index}" class="text-5xl font-black font-mono tracking-wider ${running ? 'text-brand-500 projector-timer' : 'text-white'}">${formatTime(left)}</span>
                     `;
                     projContainer.appendChild(div);
                 });
             }
         }
 
+        // Runs every second: updates clock text and fires the "time's up" alert once per run.
+        function tickTimers() {
+            let needsRender = false;
+            const serverNow = Date.now() + AppState.clockOffset;
+            AppState.timers.forEach((t, index) => {
+                const left = timerSecondsLeft(t);
+                document.querySelectorAll(`[data-timer-admin="${index}"], [data-timer-proj="${index}"]`).forEach(el => {
+                    el.textContent = formatTime(left);
+                });
+                if (t.endsAt && serverNow >= t.endsAt && timerAlerts[index] !== t.endsAt) {
+                    timerAlerts[index] = t.endsAt;
+                    const justEnded = serverNow - t.endsAt < 15000;
+                    if (t.isRunning) { t.isRunning = false; t.timeRemaining = 0; needsRender = true; }
+                    const adminWatching = AppState.adminToken
+                        && !document.getElementById('view-admin').classList.contains('hidden')
+                        && document.getElementById('view-projection').classList.contains('hidden');
+                    if (justEnded && adminWatching) showModal("Time's Up!", `${esc(t.name)} match has ended.`);
+                }
+            });
+            if (needsRender) renderTimers();
+        }
+
         function toggleTimer(index) {
             let t = AppState.timers[index];
-            if (t.isRunning) {
-                clearInterval(t.intervalId);
-                t.isRunning = false;
-            } else {
-                t.isRunning = true;
-                t.intervalId = setInterval(() => {
-                    if (t.timeRemaining > 0) {
-                        t.timeRemaining--;
-                        renderTimers(); 
-                    } else {
-                        clearInterval(t.intervalId);
-                        t.isRunning = false;
-                        renderTimers();
-                        if(document.getElementById('view-projection').classList.contains('hidden')) {
-                            showModal("Time's Up!", `${t.name} match has ended.`);
-                        }
-                    }
-                }, 1000);
-            }
-            renderTimers();
+            if (!t) return;
+            const running = t.isRunning && timerSecondsLeft(t) > 0;
+            adminAction('timer', { index, op: running ? 'pause' : 'start' });
         }
 
         function resetTimer(index) {
-            let t = AppState.timers[index];
-            clearInterval(t.intervalId);
-            t.isRunning = false;
-            t.timeRemaining = t.defaultTime;
-            renderTimers();
+            adminAction('timer', { index, op: 'reset' });
         }
 
         function updateTimerDefault(index, mins) {
-            let t = AppState.timers[index];
-            let newTime = parseInt(mins) * 60;
-            if(!isNaN(newTime) && newTime > 0) {
-                t.defaultTime = newTime;
-                if(!t.isRunning) {
-                    t.timeRemaining = newTime;
-                    renderTimers();
-                }
+            let minutes = parseInt(mins);
+            if (!isNaN(minutes) && minutes > 0) {
+                document.activeElement && document.activeElement.blur();
+                adminAction('timer', { index, op: 'setDefault', minutes });
             }
         }
 
@@ -1162,10 +1195,10 @@
             document.getElementById('view-projection').classList.remove('hidden');
             document.body.classList.remove('bg-slate-50', 'py-10');
             document.body.classList.add('bg-slate-900');
-            
-            tryRebuildBracket();
+
             updateAllBrackets();
             renderTimers();
+            loadState();
         }
 
         function closeProjectorMode() {
@@ -1175,26 +1208,31 @@
             document.body.classList.remove('bg-slate-900');
         }
 
+        function showSetupBanner() {
+            const banner = document.createElement('div');
+            banner.className = "w-full bg-amber-500 text-slate-900 text-sm font-bold text-center px-4 py-2";
+            banner.innerHTML = "Backend not connected: set <code class=\"bg-amber-200 px-1 rounded\">API_URL</code> in index.html to your Google Apps Script Web App URL (see apps-script/Code.gs).";
+            document.body.prepend(banner);
+        }
+
         function init() {
             generateTeamCode();
             addPlayerField(); addPlayerField();
-            
-            AppState.teams = [
-                { id: 't1', name: "Average Joes", code: "A111", eliminated: false, players: [{name: 'Peter L', role: 'Captain', id:'123', email:'peter@test.com', checkedIn: false}] },
-                { id: 't2', name: "Globo Gym", code: "G222", eliminated: false, players: [{name: 'White G', role: 'Captain', id:'124', email:'white@test.com', checkedIn: false}] },
-                { id: 't3', name: "Skillz That Killz", code: "S333", eliminated: false, players: [{name: 'Bob', role: 'Captain', id:'125', email:'bob@test.com', checkedIn: false}] },
-                { id: 't4', name: "Lumberjacks", code: "L444", eliminated: false, players: [{name: 'Tim', role: 'Captain', id:'126', email:'tim@test.com', checkedIn: false}] },
-                { id: 't5', name: "Tune Squad", code: "T555", eliminated: false, players: [{name: 'Bugz', role: 'Captain', id:'127', email:'bugz@test.com', checkedIn: false}] }
-            ];
-            
-            AppState.waitlist = [
-                {name: 'Free Agent 1', email: 'f1@test.com', id: '901', phone: '555-101', role: 'Player'},
-                {name: 'Free Agent 2', email: 'f2@test.com', id: '902', phone: '555-102', role: 'Player'}
-            ];
-            
+            try { AppState.adminToken = sessionStorage.getItem('dbAdminToken'); } catch (err) {}
+
             buildBracketData();
             updateAllBrackets();
-            renderAdminDashboard();
+            renderSettings();
+
+            if (!API_URL) {
+                showSetupBanner();
+                return;
+            }
+
+            loadState();
+            setInterval(tickTimers, 1000);
+            setInterval(() => { if (!document.hidden) loadState(); }, POLL_MS);
+            document.addEventListener('visibilitychange', () => { if (!document.hidden) loadState(); });
         }
 
         window.onload = init;
