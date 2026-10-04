@@ -144,6 +144,9 @@ create table if not exists app_private.email_config (
   sender_name    text not null default 'Dodgeball After Dark',
   site_url       text   -- the sign-up page; share links in emails point here
 );
+alter table app_private.email_config add column if not exists event_when  text not null default 'Oct 20, 2026 &nbsp;&bull;&nbsp; 8:00 PM - 10:00 PM';
+alter table app_private.email_config add column if not exists event_where text not null default 'LPC';
+alter table app_private.email_config add column if not exists event_blurb text not null default 'Compete in a high stakes glow in the dark dodgeball tournament with exciting prizes!';
 insert into app_private.email_config default values on conflict do nothing;
 
 create table if not exists app_private.event_log (
@@ -464,35 +467,74 @@ language sql stable as $$
   from app_private.email_config where id = 1;
 $$;
 
-/** Branded email around body_html (already escaped). rows are [label, value] pairs; values get escaped here. */
+/**
+ * The branded email. intro and body_html are already escaped (<b> is styled as white bold text);
+ * rows are [label, value] pairs and are escaped here. event_when/where/blurb come from email_config
+ * and are HTML, so entities like &bull; work there.
+ */
 create or replace function app_private.email_html(heading text, intro text, rows jsonb, body_html text default '', button_label text default null, button_url text default null)
 returns text
 language plpgsql stable as $$
 declare
+  cfg app_private.email_config;
   r jsonb;
+  cells text[] := '{}';
   rows_html text := '';
+  i int;
+  border text;
+  val text;
+  styled_intro text := replace(replace(coalesce(intro, ''), '<b>', '<strong style="color: #FFFFFF;">'), '</b>', '</strong>');
+  styled_body text := replace(replace(coalesce(body_html, ''), '<b>', '<strong style="color: #E3E5E8;">'), '</b>', '</strong>');
 begin
+  select * into cfg from app_private.email_config where id = 1;
+
   for r in select * from jsonb_array_elements(coalesce(rows, '[]'::jsonb)) loop
     continue when coalesce(r->>1, '') = '';
-    rows_html := rows_html || '<tr><td style="padding:10px 16px;color:#64748b;font-size:14px;border-top:1px solid #f1f5f9;">' || app_private.html(r->>0)
-      || '</td><td style="padding:10px 16px;color:#0f172a;font-size:14px;font-weight:700;text-align:right;word-break:break-all;border-top:1px solid #f1f5f9;'
-      || case when r->>0 = 'Team code' then 'font-family:monospace;font-size:18px;letter-spacing:3px;color:#dc2626;' else '' end
-      || '">' || app_private.html(r->>1) || '</td></tr>';
+    val := case r->>0
+      when 'Team code' then '<span style="background-color: #3F1D1D; color: #FF5E5E; font-weight: bold; font-size: 16px; letter-spacing: 2.5px; padding: 6px 12px; border-radius: 6px; display: inline-block;">' || app_private.html(r->>1) || '</span>'
+      when 'Share link' then '<a href="' || app_private.html(r->>1) || '" style="color: #4793FF; text-decoration: none; font-weight: 500;">' || app_private.html(r->>1) || '</a>'
+      else app_private.html(r->>1) end;
+    cells := cells || array[app_private.html(r->>0), val, r->>0];
   end loop;
-  return '<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,''Segoe UI'',Inter,sans-serif;">'
-    || '<table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;"><tr><td align="center">'
-    || '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;">'
-    || '<tr><td style="padding:32px;text-align:center;background:linear-gradient(135deg,#7f1d1d,#dc2626);background-color:#b91c1c;">'
-    || '<div style="font-size:12px;font-weight:800;letter-spacing:3px;color:#fecaca;text-transform:uppercase;">Dodgeball After Dark</div>'
-    || '<h1 style="margin:8px 0 0;font-size:26px;font-weight:900;color:#ffffff;">' || app_private.html(heading) || '</h1></td></tr>'
-    || '<tr><td style="padding:28px 32px 8px;"><p style="margin:0 0 20px;font-size:16px;line-height:1.5;color:#334155;">' || intro || '</p>'
-    || case when rows_html <> '' then '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:12px;border-collapse:separate;margin-bottom:20px;">'
-         || regexp_replace(rows_html, 'border-top:1px solid #f1f5f9;', '', '') || '</table>' else '' end
-    || coalesce(body_html, '')
-    || case when button_url is not null then '<div style="text-align:center;margin:8px 0 20px;"><a href="' || app_private.html(button_url)
-         || '" style="display:inline-block;padding:14px 32px;background:#dc2626;color:#ffffff;text-decoration:none;border-radius:10px;font-weight:700;font-size:16px;">'
-         || app_private.html(button_label) || '</a></div>' else '' end
-    || '</td></tr><tr><td style="padding:16px 32px 28px;"><p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;">'
+  for i in 0 .. (coalesce(array_length(cells, 1), 0) / 3) - 1 loop
+    border := case when (i + 1) * 3 < array_length(cells, 1) then ' border-bottom: 1px solid #1E1F22;' else '' end;
+    rows_html := rows_html || '<tr><td align="left" width="30%" style="padding: 18px 20px; color: #949BA4; font-size: 15px;' || border || '">' || cells[i * 3 + 1] || '</td>'
+      || '<td align="right" width="70%" style="padding: 18px 20px; '
+      || case cells[i * 3 + 3]
+           when 'Share link' then 'font-size: 14px; word-break: break-all;'
+           when 'Team code' then ''
+           else 'color: #FFFFFF; font-weight: 600; font-size: 15px;' end
+      || border || '">' || cells[i * 3 + 2] || '</td></tr>';
+  end loop;
+
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">'
+    || '<title>' || app_private.html(heading) || '</title><style>'
+    || 'body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; } '
+    || 'table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; } '
+    || 'img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; } '
+    || 'table { border-collapse: collapse !important; } '
+    || 'body { height: 100% !important; margin: 0 !important; padding: 0 !important; width: 100% !important; background-color: #2C2F33; }'
+    || '</style></head>'
+    || '<body style="background-color: #2C2F33; margin: 0; padding: 0; font-family: ''Inter'', -apple-system, BlinkMacSystemFont, ''Segoe UI'', Roboto, Helvetica, Arial, sans-serif;">'
+    || '<table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #2C2F33; padding: 40px 20px;"><tr><td align="center">'
+    || '<table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #18191C; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.4);">'
+    || '<tr><td align="center" style="background-color: #18191C;"><img src="https://i.imgur.com/qDkdmGO.jpeg" alt="Dodgeball After Dark Header" width="600" style="display: block; width: 100%; max-width: 600px; border: 0;"></td></tr>'
+    || '<tr><td align="left" style="padding: 40px 35px;">'
+    || '<p style="margin: 0 0 10px 0; color: #E3E5E8; font-size: 16px; line-height: 1.6;">' || styled_intro || '</p>'
+    || '<p style="margin: 0 0 30px 0; color: #949BA4; font-size: 15px; line-height: 1.6;">' || cfg.event_blurb || '</p>'
+    || '<table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #2B2D31; border-radius: 10px; margin-bottom: 20px; overflow: hidden;">'
+    || '<tr><td align="left" style="padding: 18px 20px; border-bottom: 1px solid #1E1F22;"><div style="color: #949BA4; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; font-weight: 600;">When</div>'
+    || '<div style="color: #FFFFFF; font-size: 15px; font-weight: 500;">' || cfg.event_when || '</div></td></tr>'
+    || '<tr><td align="left" style="padding: 18px 20px;"><div style="color: #949BA4; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; font-weight: 600;">Where</div>'
+    || '<div style="color: #FFFFFF; font-size: 15px; font-weight: 500;">' || cfg.event_where || '</div></td></tr></table>'
+    || case when rows_html <> '' then '<table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #2B2D31; border-radius: 10px; margin-bottom: 30px; overflow: hidden;">' || rows_html || '</table>' else '' end
+    || styled_body
+    || case when button_url is not null then
+         '<table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td align="center"><table border="0" cellpadding="0" cellspacing="0"><tr>'
+         || '<td align="center" style="background-color: #C10000; border-radius: 8px;"><a href="' || app_private.html(button_url) || '" target="_blank" style="display: inline-block; padding: 16px 36px; font-family: ''Inter'', Helvetica, Arial, sans-serif; font-size: 16px; color: #ffffff; text-decoration: none; font-weight: bold; border-radius: 8px;">'
+         || app_private.html(button_label) || '</a></td></tr></table></td></tr></table>' else '' end
+    || '</td></tr>'
+    || '<tr><td align="center" style="padding: 0 35px 40px 35px;"><p style="margin: 0; color: #6D727A; font-size: 12px; line-height: 1.5; text-align: center;">'
     || 'You''re getting this because this address was used to sign up for Dodgeball After Dark. If that wasn''t you, you can ignore this email.'
     || '</p></td></tr></table></td></tr></table></body></html>';
 end $$;
@@ -526,9 +568,10 @@ returns boolean
 language plpgsql as $$
 declare
   link text;
+  site text := (select nullif(site_url, '') from app_private.email_config where id = 1);
   sent boolean := false;
   inv jsonb;
-  manage_note constant text := '<p style="margin:0 0 20px;font-size:14px;line-height:1.5;color:#64748b;">Need to remove someone or make changes? Use <b>Manage My Team</b> on the sign-up page with your team code. Keep the code to yourself and your teammates: anyone who has it can join or manage the team.</p>';
+  manage_note constant text := '<p style="margin: 0 0 35px 0; color: #949BA4; font-size: 14px; line-height: 1.6;">Need to remove someone or make changes? Use <b>Manage My Team</b> on the sign-up page with your team code. Keep the code to yourself and your teammates: anyone who has it can join or manage the team.</p>';
 begin
   if team.id is not null then link := app_private.join_link(team.code); end if;
 
@@ -539,7 +582,7 @@ begin
           || 'Share your team code' || case when link is not null then ' or the link below' else '' end || ' so your teammates can join.',
         jsonb_build_array(jsonb_build_array('Team', team.name), jsonb_build_array('Role', 'Captain'), jsonb_build_array('Team code', team.code),
           jsonb_build_array('Share link', link)),
-        manage_note, case when link is not null then 'Open the join page' end, link));
+        manage_note, case when site is not null then 'Open the join page' end, site));
     -- Teammates the captain listed by email still have to confirm their spot.
     for inv in select * from jsonb_array_elements(coalesce(invitees, '[]'::jsonb)) loop
       continue when coalesce(inv->>'email', '') = '';
@@ -556,14 +599,13 @@ begin
         'Hi ' || app_private.html(v_name) || ', you''ve joined <b>' || app_private.html(team.name) || '</b>. '
           || 'Know someone else who should be on the team? Send them the code' || case when link is not null then ' or the link below' else '' end || '.',
         jsonb_build_array(jsonb_build_array('Team', team.name), jsonb_build_array('Team code', team.code), jsonb_build_array('Share link', link)),
-        manage_note, case when link is not null then 'Open the join page' end, link));
+        manage_note, case when site is not null then 'Open the join page' end, site));
   else
-    link := (select nullif(site_url, '') from app_private.email_config where id = 1);
     sent := app_private.send_email(v_email, v_name, 'You''re on the waitlist – Dodgeball After Dark',
       app_private.email_html('You''re on the waitlist!',
         'Hi ' || app_private.html(v_name) || ', you''re signed up as a free agent. We''ll place you on a team as spots open up.',
         jsonb_build_array(jsonb_build_array('Status', 'Free agent (waitlist)'), jsonb_build_array('Place in line', '#' || waitlist_pos)),
-        '', case when link is not null then 'Invite your friends' end, link));
+        '', case when site is not null then 'Invite your friends' end, site));
   end if;
   return sent;
 end $$;
