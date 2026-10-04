@@ -90,6 +90,11 @@ create table if not exists app_private.players (
   updated_at  timestamptz not null default now()
 );
 create unique index if not exists players_email_ci on app_private.players (lower(email)) where email <> '';
+-- false = a captain listed this player and they haven't signed up themselves yet.
+alter table app_private.players add column if not exists confirmed boolean;
+update app_private.players set confirmed = (student_id <> '') where confirmed is null;
+alter table app_private.players alter column confirmed set default true;
+alter table app_private.players alter column confirmed set not null;
 create index if not exists players_team on app_private.players (team_id);
 
 -- Single-elimination layout. The last round holds one "match" whose team1 is the champion.
@@ -611,6 +616,60 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+--  Team name filter
+-- ---------------------------------------------------------------------------
+
+/**
+ * True if a team name contains profanity, slurs or sexual terms. Checks each word, and catches
+ * l33t spellings (5h1t), spaced-out letters (f u c k, f.u.c.k) and stretched letters (fuuuck).
+ * Words that are also parts of normal words (ass, cock, rape…) only count as a whole word, so
+ * "Grapes", "Peacocks" or "Smash It" are fine. Admins can still name a team anything.
+ * Add words to the lists below if you see something slip through.
+ */
+create or replace function app_private.is_inappropriate(v text) returns boolean
+language plpgsql immutable as $$
+declare
+  -- Blocked anywhere inside a word.
+  anywhere constant text[] := array[
+    'fuck', 'phuck', 'shit', 'cunt', 'nigger', 'nigga', 'faggot', 'fagot', 'bitch', 'biatch', 'whore', 'slut', 'pussy',
+    'penis', 'vagina', 'dildo', 'porn', 'molest', 'pedophil', 'paedophil', 'nazi', 'hitler', 'retard', 'tranny',
+    'cocksuck', 'blowjob', 'handjob', 'jizz', 'bollock', 'wetback', 'raghead', 'towelhead', 'asshole', 'dickhead',
+    'titty', 'titties', 'boob', 'milf', 'bastard', 'douche', 'motherf', 'nutsack', 'ballsack', 'testicle', 'erection',
+    'orgasm', 'horny', 'killyourself', 'genocide', 'cumshot', 'creampie', 'hentai', 'masturbat', 'buttplug',
+    'siegheil', 'whitepower'];
+  -- Blocked only as a whole word (plurals with s/es included).
+  whole constant text[] := array[
+    'ass', 'arse', 'anal', 'anus', 'cum', 'sex', 'sexy', 'dick', 'cock', 'tit', 'hoe', 'thot', 'rape', 'raped', 'raping', 'rapist',
+    'homo', 'fag', 'fuk', 'fck', 'twat', 'wank', 'wanker', 'spic', 'coon', 'kike', 'gook', 'chink', 'dyke', 'beaner',
+    'negro', 'heil', 'kkk', 'kys', 'pedo', 'nude', 'boner', 'semen', 'scrotum', 'sperm', 'pimp', 'skank', 'goddamn',
+    'piss', 'jap', 'lesbo', 'incest', 'clit', 'redskin', 'jihad'];
+  base text;
+  tok text;
+  sq text;
+  w text;
+begin
+  -- Lowercase, undo common l33t swaps and accents, then join runs of single letters ("f u c k" -> "fuck").
+  base := translate(lower(coalesce(v, '')), '0134578@$!|+', 'oieastbasiit');
+  base := translate(base, 'àáâãäåèéêëìíîïòóôõöùúûüýÿñç', 'aaaaaaeeeeiiiiooooouuuuyync');
+  base := regexp_replace(base, '(?<=(^|[^a-z])[a-z])[^a-z]+(?=[a-z]([^a-z]|$))', '', 'g');
+
+  for tok in select regexp_split_to_table(base, '[^a-z]+') loop
+    continue when tok = '';
+    sq := regexp_replace(tok, '([a-z])\1+', '\1', 'g');  -- fuuuck -> fuck
+    foreach w in array anywhere loop
+      if position(w in tok) > 0 then return true; end if;
+      -- Stretched letters, for words that have no double letters of their own (so "boob" never matches "bob").
+      if w !~ '([a-z])\1' and position(w in sq) > 0 then return true; end if;
+    end loop;
+    foreach w in array whole loop
+      if tok in (w, w || 's', w || 'es') then return true; end if;
+      if w !~ '([a-z])\1' and sq in (w, w || 's', w || 'es') then return true; end if;
+    end loop;
+  end loop;
+  return false;
+end $$;
+
+-- ---------------------------------------------------------------------------
 --  Registration (public)
 -- ---------------------------------------------------------------------------
 
@@ -658,8 +717,9 @@ declare
   v_code text;
   extra jsonb;
   extras jsonb := '[]'::jsonb;
-  x_name text; x_email text; x_role text;
+  x_name text; x_email text; x_role text; x_sid text;
   seen text[];
+  seen_ids text[];
   pre app_private.players;
   roster_size int;
 begin
@@ -679,24 +739,32 @@ begin
   if mode = 'create' then
     team_name := app_private.clean_text(p->>'teamName', 40);
     if team_name = '' then perform app_private.fail('Team name is required.'); end if;
+    if app_private.is_inappropriate(team_name) then
+      perform app_private.fail('Please choose a different team name. Team names can''t include profanity, slurs or sexual content.');
+    end if;
     if exists (select 1 from app_private.teams where lower(name) = lower(team_name)) then
       perform app_private.fail('A team named "' || team_name || '" already exists. Please pick another name.');
     end if;
     perform app_private.assert_available(v_email, v_sid);
 
     seen := array[v_email];
+    seen_ids := array[v_sid];
     for extra in select * from jsonb_array_elements(case when jsonb_typeof(p->'roster') = 'array' then p->'roster' else '[]'::jsonb end) loop
       x_name := app_private.clean_text(extra->>'name', 60);
       continue when x_name = '';
       x_email := app_private.clean_email(extra->>'email');
       x_role := case when extra->>'role' = 'Alternate' then 'Alternate' else 'Player' end;
+      x_sid := app_private.clean_text(extra->>'studentId', 30);
+      if x_sid = '' then perform app_private.fail('Please enter a student ID for ' || x_name || '.'); end if;
+      if x_sid = any(seen_ids) then perform app_private.fail('Student ID ' || x_sid || ' is listed more than once.'); end if;
+      seen_ids := seen_ids || x_sid;
       if x_email <> '' then
         if not app_private.is_email(x_email) then perform app_private.fail('"' || x_email || '" is not a valid email address.'); end if;
         if x_email = any(seen) then perform app_private.fail('The email ' || x_email || ' is listed more than once.'); end if;
         seen := seen || x_email;
-        perform app_private.assert_available(x_email, '');
       end if;
-      extras := extras || jsonb_build_object('name', x_name, 'email', x_email, 'role', x_role);
+      perform app_private.assert_available(x_email, x_sid);
+      extras := extras || jsonb_build_object('name', x_name, 'email', x_email, 'role', x_role, 'studentId', x_sid);
     end loop;
     if 1 + jsonb_array_length(extras) > s.max_team_size then
       perform app_private.fail('Teams are limited to ' || s.max_team_size || ' players including the captain.');
@@ -705,8 +773,8 @@ begin
     insert into app_private.teams (name, code) values (team_name, app_private.unique_team_code(p->>'teamCode')) returning * into team;
     insert into app_private.players (team_id, name, email, phone, student_id, role)
       values (team.id, v_name, v_email, v_phone, v_sid, 'Captain');
-    insert into app_private.players (team_id, name, email, role)
-      select team.id, e->>'name', e->>'email', e->>'role' from jsonb_array_elements(extras) e;
+    insert into app_private.players (team_id, name, email, student_id, role, confirmed)
+      select team.id, e->>'name', e->>'email', e->>'studentId', e->>'role', false from jsonb_array_elements(extras) e;
     perform app_private.sync_bracket();
     perform app_private.log('register:create', team.name || ' (' || team.code || ') by ' || v_name || ' <' || v_email || '>, ' || (1 + jsonb_array_length(extras)) || ' players');
     return jsonb_build_object(
@@ -723,12 +791,15 @@ begin
     if not found then perform app_private.fail('We couldn''t find a team with the code ' || v_code || '. Please check and try again.'); end if;
     if team.eliminated then perform app_private.fail('"' || team.name || '" has been eliminated and can no longer add players.'); end if;
 
-    -- A captain may have pre-listed this player by email: claim that spot instead of duplicating.
+    -- A captain may have pre-listed this player (by email or student ID): claim that spot instead of duplicating.
     select * into pre from app_private.players
-      where team_id = team.id and student_id = '' and email <> '' and lower(email) = v_email limit 1;
+      where team_id = team.id and not confirmed
+        and ((email <> '' and lower(email) = v_email) or (student_id <> '' and student_id = v_sid))
+      order by (lower(email) = v_email) desc limit 1;
     if found then
-      perform app_private.assert_available('', v_sid, pre.id);
-      update app_private.players set name = v_name, phone = v_phone, student_id = v_sid, updated_at = now() where id = pre.id;
+      perform app_private.assert_available(v_email, v_sid, pre.id);
+      update app_private.players set name = v_name, email = v_email, phone = v_phone, student_id = v_sid, confirmed = true, updated_at = now()
+        where id = pre.id;
       perform app_private.log('register:claim', v_name || ' <' || v_email || '> confirmed spot on ' || team.name);
       return jsonb_build_object('message', 'You have confirmed your spot on "' || team.name || '"!', 'teamName', team.name, 'teamCode', team.code,
         'emailSent', app_private.send_registration_emails('join', v_name, v_email, team, null));
@@ -781,7 +852,7 @@ language sql stable as $$
     'players', coalesce((select jsonb_agg(jsonb_build_object(
         'playerId', p.id, 'name', p.name, 'role', p.role,
         'email', app_private.mask_email(p.email), 'studentId', app_private.mask_id(p.student_id),
-        'confirmed', p.student_id <> '') order by p.seq)
+        'confirmed', p.confirmed) order by p.seq)
       from app_private.players p where p.team_id = t.id), '[]'::jsonb));
 $$;
 
@@ -1047,6 +1118,22 @@ begin
   return jsonb_build_object('teamId', t.id);
 end $$;
 
+create or replace function app_private.rename_team(p jsonb) returns jsonb
+language plpgsql as $$
+declare t app_private.teams; new_name text := app_private.clean_text(p->>'name', 40); old_name text;
+begin
+  select * into t from app_private.teams where id = p->>'teamId';
+  if not found then perform app_private.fail('Team not found.'); end if;
+  if new_name = '' then perform app_private.fail('Please enter a team name.'); end if;
+  if exists (select 1 from app_private.teams where lower(name) = lower(new_name) and id <> t.id) then
+    perform app_private.fail('A team named "' || new_name || '" already exists.');
+  end if;
+  old_name := t.name;
+  update app_private.teams set name = new_name, updated_at = now() where id = t.id;
+  perform app_private.log('team:rename', old_name || ' -> ' || new_name || ' (' || t.code || ')');
+  return jsonb_build_object('message', '"' || old_name || '" is now "' || new_name || '".');
+end $$;
+
 create or replace function app_private.add_player(p jsonb) returns jsonb
 language plpgsql as $$
 declare
@@ -1258,7 +1345,7 @@ as $$
 declare
   is_admin boolean;
   result jsonb;
-  admin_actions constant text[] := array['setSetting', 'processWaitlist', 'fillTeam', 'resetBracket', 'addTeam', 'addPlayer',
+  admin_actions constant text[] := array['setSetting', 'processWaitlist', 'fillTeam', 'resetBracket', 'addTeam', 'renameTeam', 'addPlayer',
     'removePlayer', 'deleteTeam', 'toggleCheckIn', 'setTeamCheckIn', 'advanceTeam', 'undoAdvance', 'timer'];
 begin
   payload := coalesce(payload, '{}'::jsonb);
@@ -1285,6 +1372,7 @@ begin
     when 'fillTeam'         then result := app_private.fill_team(payload);
     when 'resetBracket'     then result := app_private.reset_bracket(payload);
     when 'addTeam'          then result := app_private.add_team(payload);
+    when 'renameTeam'       then result := app_private.rename_team(payload);
     when 'addPlayer'        then result := app_private.add_player(payload);
     when 'removePlayer'     then result := app_private.remove_player_admin(payload);
     when 'deleteTeam'       then result := app_private.delete_team_admin(payload);
