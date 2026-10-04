@@ -45,6 +45,17 @@ Emails come from `noreply@cabgcu.com` ("Dodgeball After Dark"). That sender has 
 Brevo. It already is if Commuter Life's emails work. To change it, edit the one row in
 `app_private.email_config`. To turn emails off, run `select app_private.configure_email(null);`.
 
+The When / Where box and the event description in every email come from `app_private.email_config`.
+Change them there when the details change (they're HTML, so `&bull;` and `&amp;` work):
+
+```sql
+update app_private.email_config set
+  event_when  = 'Oct 20, 2026 &nbsp;&bull;&nbsp; 8:00 PM - 10:00 PM',
+  event_where = 'LPC',
+  event_blurb = 'Compete in a high stakes glow in the dark dodgeball tournament with exciting prizes!'
+where id = 1;
+```
+
 To see whether emails went out, look at the last few Brevo responses (pg_net keeps them for 6 hours):
 
 ```sql
@@ -92,7 +103,7 @@ Supabase ▸ **Table Editor**, then switch the schema dropdown from `public` to 
 | `matches` | bracket slots and winners (`round` and `pos` start at 0) |
 | `settings` | registration / waitlist open, team sizes |
 | `timers` | the three court clocks |
-| `email_config` | Brevo key, sender and site link for confirmation emails |
+| `email_config` | Brevo key, sender, site link and event details for confirmation emails |
 | `event_log` | everything that happened, including errors |
 
 Rosters can be exported as CSV from the Table Editor.
