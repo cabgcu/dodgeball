@@ -6,6 +6,7 @@
     <title>Dodgeball After Dark | Admin & Registration</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
     <script>
         tailwind.config = {
@@ -324,16 +325,16 @@
                         <!-- TAB: Rosters -->
                         <div id="admin-tab-roster" class="hidden space-y-6">
                             <div class="flex flex-col md:flex-row justify-between md:items-end gap-4">
-                                <div>
+                                <div class="min-w-0">
                                     <h2 class="text-2xl font-bold text-slate-900">Rosters &amp; Check-In</h2>
                                     <p class="text-slate-500 text-sm mt-1">Teams are listed A–Z. Advancing a team clears its check-ins so players check in again for the next round.</p>
                                 </div>
-                                <div class="flex flex-wrap gap-2">
-                                    <div class="relative">
+                                <div class="flex items-center gap-2 w-full md:w-auto shrink-0">
+                                    <div class="relative flex-1 md:flex-none min-w-0">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" /></svg>
-                                        <input type="search" id="roster-search" oninput="renderRosterTable()" placeholder="Search players or teams" class="w-64 pl-9 pr-3 py-2 rounded-lg bg-white border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
+                                        <input type="search" id="roster-search" oninput="renderRosterTable()" placeholder="Search players or teams" class="w-full md:w-64 pl-9 pr-3 py-2 rounded-lg bg-white border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
                                     </div>
-                                    <button onclick="addEmptyTeam()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors">+ Add Team</button>
+                                    <button onclick="addEmptyTeam()" class="shrink-0 whitespace-nowrap px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors">+ Add Team</button>
                                 </div>
                             </div>
 
@@ -348,8 +349,8 @@
     </div>
 
     <!-- Projector View (Hidden by default) -->
-    <div id="view-projection" class="hidden min-h-screen flex-col items-center p-8">
-        <div class="w-full flex justify-between items-center mb-12">
+    <div id="view-projection" class="hidden h-screen overflow-hidden flex flex-col items-center p-6">
+        <div class="w-full flex justify-between items-center gap-6 mb-6 shrink-0">
             <h1 class="text-6xl font-black text-white uppercase italic drop-shadow-2xl">Dodgeball <span class="text-brand-500">After Dark</span></h1>
             <div class="flex gap-8" id="projection-timers-container"></div>
             <div class="flex gap-3">
@@ -357,10 +358,12 @@
                 <button onclick="closeProjectorMode()" class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg border border-slate-600 transition-colors shadow-lg">Exit Projector</button>
             </div>
         </div>
-        <div class="w-full max-w-[95%] overflow-x-auto bg-slate-800/50 p-8 rounded-3xl border border-slate-700 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
-            <div class="w-max mx-auto">
-                <div id="proj-bracket-headers" class="relative h-16 mb-8 w-full"></div>
-                <div id="proj-bracket-canvas" class="relative w-full min-h-[600px]"></div>
+        <div id="proj-bracket-panel" class="w-full flex-1 min-h-0 overflow-hidden flex items-center justify-center bg-slate-800/50 p-6 rounded-3xl border border-slate-700 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+            <div id="proj-bracket-sizer" class="relative shrink-0">
+                <div id="proj-bracket-inner" class="absolute top-0 left-0 w-max">
+                    <div id="proj-bracket-headers" class="relative h-16 mb-8 w-full"></div>
+                    <div id="proj-bracket-canvas" class="relative w-full"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -1019,26 +1022,34 @@
         const LOGO_URL = 'https://i.imgur.com/7AC3kel.png';
 
         // Empty placeholder layout shown before the server responds. Seeding mirrors computeBracket_ in Code.gs.
+        // Same layout as app_private.rebuild_bracket (only used before the server state arrives).
         function buildBracketData() {
-            const activeTeams = AppState.teams;
-            const teamCount = Math.max(2, activeTeams.length);
-            const numRounds = Math.ceil(Math.log2(teamCount)) + 1;
+            const teams = AppState.teams;
+            const n = teams.length;
+            const numRounds = Math.ceil(Math.log2(Math.max(2, n))) + 1;
 
             const matches = [];
             for (let r = 0; r < numRounds; r++) {
-                const roundMatches = [];
-                const matchesInRound = (r === numRounds - 1) ? 1 : Math.pow(2, numRounds - r - 2);
-                for (let m = 0; m < matchesInRound; m++) {
-                    roundMatches.push({ round: r, pos: m, team1: null, team2: null, winner: null });
-                }
-                matches.push(roundMatches);
+                const count = (r === numRounds - 1) ? 1 : Math.pow(2, numRounds - r - 2);
+                matches.push(Array.from({ length: count }, (_, m) => ({ round: r, pos: m, team1: null, team2: null, winner: null })));
             }
 
-            const first = matches[0];
-            activeTeams.forEach((team, i) => {
-                if (i < first.length) first[i].team1 = team;
-                else if (i < first.length * 2) first[i - first.length].team2 = team;
-            });
+            const half = matches[0].length;
+            const bits = numRounds - 2;
+            const games = n < 2 ? half : n - half;
+            let i = 0;
+            for (let m = 0; m < half; m++) {
+                let rank = 0;
+                for (let b = 0; b < bits; b++) if ((m >> b) & 1) rank |= 1 << (bits - 1 - b);
+                if (rank < games) {
+                    matches[0][m].team1 = teams[i] || null;
+                    matches[0][m].team2 = teams[i + 1] || null;
+                    i += 2;
+                } else {
+                    matches[1][m >> 1][m % 2 === 0 ? 'team1' : 'team2'] = teams[i] || null;
+                    i += 1;
+                }
+            }
             AppState.bracket = matches;
         }
 
@@ -1050,6 +1061,7 @@
             }
             if (!document.getElementById('view-projection').classList.contains('hidden')) {
                 renderBracket('proj-bracket-canvas', 'proj-bracket-headers', false, true);
+                fitProjectorBracket();
             }
         }
 
@@ -1190,17 +1202,29 @@
             const dark = isProjector;
 
             // Pixel layout: every match is centred between the two matches that feed it.
-            const colW = isProjector ? 320 : 260;
+            // When byes leave at most one first-round game per second-round match, the first-round games sit
+            // beside the spot they feed instead of getting a row each, which halves the bracket's height.
+            const compact = numRounds > 2 && !editing && matches[1].every((_, k) =>
+                [matches[0][2 * k], matches[0][2 * k + 1]].filter(mt => mt && (mt.team1 || mt.team2)).length <= 1);
+            const rows = compact ? matches[1].length : matches[0].length;
+            const big = isProjector && rows > 8;
+            const rowH = isProjector ? (big ? 40 : 52) : 36;
+            const colW = isProjector ? (big ? 280 : 320) : 260;
             const cardW = colW - 56;
-            const matchH = isProjector ? 140 : 110;
+            const cardH = rowH * 2 + 2;
+            const baseH = isProjector ? (big ? 96 : 140) : 110;
+            const matchH = compact ? Math.max(baseH, cardH + rowH + 8) : baseH;
             const champH = isProjector ? 240 : 190;
-            const finalOffset = 0.5 * Math.pow(2, Math.max(numRounds - 2, 0)) * matchH;
+            const finalOffset = 0.5 * Math.pow(2, Math.max(numRounds - 2 - (compact ? 1 : 0), 0)) * matchH;
             const padY = Math.max(16, Math.ceil(champH / 2 - finalOffset) + 8);
             const lineColor = dark ? '#475569' : '#cbd5e1';
-            const firstRound = matches[0].length;
             const totalW = (numRounds - 1) * colW + cardW;
             const centerY = (r, m) => {
                 if (r === numRounds - 1) r = numRounds - 2; // champion sits level with the final
+                if (compact) {
+                    if (r === 0) return centerY(1, m >> 1) + (m % 2 ? 1 : -1) * rowH / 2;
+                    return padY + (m + 0.5) * Math.pow(2, r - 1) * matchH;
+                }
                 return padY + (m + 0.5) * Math.pow(2, r) * matchH;
             };
 
@@ -1217,7 +1241,7 @@
 
             canvas.className = "relative";
             canvas.style.width = totalW + 'px';
-            canvas.style.height = (firstRound * matchH + padY * 2) + 'px';
+            canvas.style.height = (rows * matchH + padY * 2) + 'px';
 
             const line = (left, top, width, height) => {
                 const el = document.createElement('div');
@@ -1230,10 +1254,12 @@
                 canvas.appendChild(el);
             };
 
-            const rowSize = isProjector ? 'text-lg px-4 py-3' : 'text-sm px-3 py-2';
+            const rowSize = isProjector ? (big ? 'text-base px-3 py-2' : 'text-lg px-4 py-3') : 'text-sm px-3 py-2';
 
             for (let r = 0; r < numRounds; r++) {
                 matches[r].forEach((match, m) => {
+                    // A first-round match with nobody in it is a bye: the team already sits in round 2.
+                    if (r === 0 && numRounds > 2 && !match.team1 && !match.team2 && !editing) return;
                     const y = centerY(r, m);
                     const mDiv = document.createElement('div');
                     mDiv.className = "absolute z-10";
@@ -1441,6 +1467,7 @@
             reset: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M5.6 15a7 7 0 0011.8 2.4M18.4 9A7 7 0 006.6 6.6"/>',
             trash: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m2 0l-.8 12a2 2 0 01-2 1.9H8.8a2 2 0 01-2-1.9L6 7"/>',
             x: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 6l12 12M18 6L6 18"/>',
+            qr: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2M14 18h2M18 18h2v2M16 16h2v2"/>',
             pencil: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.2 5.2l3.6 3.6M4 20l4.2-1 10.3-10.3a1.8 1.8 0 000-2.5l-1.2-1.2a1.8 1.8 0 00-2.5 0L4.5 15.3 4 20z"/>',
         };
         const icon = (name, cls = 'h-4 w-4') => `<svg xmlns="http://www.w3.org/2000/svg" class="${cls}" fill="none" viewBox="0 0 24 24" stroke="currentColor">${ICONS[name]}</svg>`;
@@ -1591,6 +1618,7 @@
                                         : ''}
                                     <button onclick="checkInTeam('${esc(team.id)}')" class="px-3 py-1.5 whitespace-nowrap text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">Check in all</button>
                                     <button onclick="resetTeamCheckIn('${esc(team.id)}')" title="Clear check-ins" class="p-2 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors">${icon('reset')}</button>
+                                    <button onclick="showTeamQr('${esc(team.id)}')" title="QR code to join this team" class="p-2 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors">${icon('qr')}</button>
                                     <button onclick="renameTeamModal('${esc(team.id)}')" title="Rename team" class="p-2 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors">${icon('pencil')}</button>
                                     <button onclick="adminAddPlayerModal('${esc(team.id)}')" title="Add player" class="p-2 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors">${icon('plus')}</button>
                                     <button onclick="confirmDeleteTeam('${esc(team.id)}')" title="Delete team" class="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors">${icon('trash')}</button>
@@ -1637,6 +1665,95 @@
             if (!found) return;
             showModal("Remove Player?", `Remove <b>${esc(found.player.name)}</b> from ${found.team ? `<b>${esc(found.team.name)}</b>` : 'the waitlist'}?`,
                 `<button onclick="closeModal(); adminAction('removePlayer', { playerId: '${esc(playerId)}' })" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold shadow">Yes, Remove</button>`);
+        }
+
+        // ---------- Team QR codes ----------
+
+        function teamQr(url) {
+            if (typeof qrcode !== 'function') return null;
+            const qr = qrcode(0, 'M');
+            qr.addData(url);
+            qr.make();
+            return qr;
+        }
+
+        function showTeamQr(teamId) {
+            const team = teamById(teamId);
+            if (!team) return;
+            const url = joinLink(team.code);
+            const qr = teamQr(url);
+            if (!qr) {
+                showModal("QR Code Unavailable", "The QR code library didn't load. Check your connection and try again.");
+                return;
+            }
+            const svg = qr.createSvgTag({ cellSize: 8, margin: 2, title: 'Join ' + team.name, scalable: true });
+            showModal(`Join ${esc(team.name)}`, `
+                <div class="text-center">
+                    <div id="team-qr" class="mx-auto w-64 max-w-full bg-white p-2 rounded-lg border border-slate-200 [&>svg]:w-full [&>svg]:h-auto">${svg}</div>
+                    <p class="text-sm text-slate-500 mt-3">Scan with a phone camera to open the Join form with this team's code filled in.</p>
+                    <p class="mt-2 font-mono font-black tracking-widest text-brand-600 text-xl">${esc(team.code)}</p>
+                    <div class="flex gap-2 mt-3">
+                        <input id="share-link" readonly value="${esc(url)}" onclick="this.select()" class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs text-slate-700 font-mono">
+                        <button onclick="copyShareLink()" id="copy-link-btn" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-lg whitespace-nowrap">Copy link</button>
+                    </div>
+                </div>`,
+                `<button onclick="showTeamQrFullscreen('${esc(teamId)}')" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-bold shadow">Full Screen</button>
+                 <button onclick="downloadTeamQr('${esc(teamId)}')" class="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-lg font-semibold">Download</button>`);
+            const el = document.querySelector('#team-qr svg');
+            if (el) { el.removeAttribute('width'); el.removeAttribute('height'); }
+        }
+
+        // A big QR to hold up or leave on a laptop at the sign-up table.
+        function showTeamQrFullscreen(teamId) {
+            const team = teamById(teamId);
+            const qr = team && teamQr(joinLink(team.code));
+            if (!qr) return;
+            closeModal();
+            const overlay = document.createElement('div');
+            overlay.id = 'qr-fullscreen';
+            overlay.className = 'fixed inset-0 z-[300] bg-white flex flex-col items-center justify-center p-6 cursor-pointer';
+            overlay.title = 'Click anywhere to close';
+            overlay.onclick = () => overlay.remove();
+            overlay.innerHTML = `
+                <div class="text-sm font-black uppercase tracking-[0.3em] text-brand-600">Dodgeball After Dark</div>
+                <div class="text-4xl sm:text-5xl font-black text-slate-900 mt-2 text-center">Join ${esc(team.name)}</div>
+                <div class="my-6 [&>svg]:w-full [&>svg]:h-full" style="width:min(70vh,85vw);height:min(70vh,85vw)">${qr.createSvgTag({ cellSize: 8, margin: 1, scalable: true })}</div>
+                <div class="text-lg text-slate-500">Scan with your phone camera · Team code <span class="font-mono font-black tracking-widest text-slate-900">${esc(team.code)}</span></div>
+                <div class="text-xs text-slate-400 mt-4">Click anywhere to close</div>`;
+            const svg = overlay.querySelector('svg');
+            if (svg) { svg.removeAttribute('width'); svg.removeAttribute('height'); }
+            document.body.appendChild(overlay);
+        }
+
+        function downloadTeamQr(teamId) {
+            const team = teamById(teamId);
+            const qr = team && teamQr(joinLink(team.code));
+            if (!qr) return;
+            const img = new Image();
+            img.onload = () => {
+                const pad = 40, label = 70;
+                const size = img.width;
+                const canvas = document.createElement('canvas');
+                canvas.width = size + pad * 2;
+                canvas.height = size + pad * 2 + label;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(img, pad, pad);
+                ctx.fillStyle = '#0f172a';
+                ctx.textAlign = 'center';
+                ctx.font = 'bold 26px Inter, Arial, sans-serif';
+                ctx.fillText('Join ' + team.name, canvas.width / 2, size + pad + 34);
+                ctx.font = 'bold 20px monospace';
+                ctx.fillStyle = '#dc2626';
+                ctx.fillText(team.code, canvas.width / 2, size + pad + 62);
+                const a = document.createElement('a');
+                a.href = canvas.toDataURL('image/png');
+                a.download = `${team.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'team'}-qr.png`;
+                a.click();
+            };
+            img.src = qr.createDataURL(12, 0);
         }
 
         function renameTeamModal(teamId) {
@@ -1865,7 +1982,29 @@
             updateAllBrackets();
             renderTimers();
             loadState();
+            requestAnimationFrame(fitProjectorBracket);
         }
+
+        // Scale the projector bracket so the whole thing fits on screen, however many teams there are.
+        function fitProjectorBracket() {
+            const panel = document.getElementById('proj-bracket-panel');
+            const sizer = document.getElementById('proj-bracket-sizer');
+            const inner = document.getElementById('proj-bracket-inner');
+            if (!panel || !inner || document.getElementById('view-projection').classList.contains('hidden')) return;
+            inner.style.transform = 'none';
+            const w = inner.offsetWidth, h = inner.offsetHeight;
+            if (!w || !h) return;
+            const style = getComputedStyle(panel);
+            const availW = panel.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+            const availH = panel.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+            const scale = Math.max(0.05, Math.min(availW / w, availH / h, 1.6));
+            inner.style.transformOrigin = 'top left';
+            inner.style.transform = `scale(${scale})`;
+            sizer.style.width = (w * scale) + 'px';
+            sizer.style.height = (h * scale) + 'px';
+        }
+        window.addEventListener('resize', fitProjectorBracket);
+        document.addEventListener('fullscreenchange', () => setTimeout(fitProjectorBracket, 50));
 
         function toggleFullscreen() {
             if (document.fullscreenElement) document.exitFullscreen();
