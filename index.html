@@ -1166,7 +1166,7 @@
                         <span class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${p.checkedIn ? 'translate-x-4' : ''}"></span>
                     </span>
                     <span class="text-xs font-semibold w-20 text-left whitespace-nowrap ${p.checkedIn ? 'text-emerald-700' : 'text-slate-400'}">${p.checkedIn ? 'Checked in' : 'Not in'}</span>
-                </button>` : '';
+                </button>` : assignPicker(p);
             return `
                 <tr class="hover:bg-slate-50/70">
                     <td class="pl-6 pr-4 py-3.5 truncate"><span class="font-medium text-slate-900">${esc(p.name)}</span>${role}</td>
@@ -1178,6 +1178,47 @@
                         <button onclick="confirmRemovePlayer('${esc(p.playerId)}')" title="Remove player" class="p-1.5 rounded-md text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors">${icon('x')}</button>
                     </td>
                 </tr>`;
+        }
+
+        function openSpots(team) {
+            return Math.max(0, AppState.settings.maxTeamSize - team.players.length);
+        }
+
+        function teamsWithRoom() {
+            return [...AppState.teams].filter(t => !t.eliminated && openSpots(t) > 0).sort((a, b) => a.name.localeCompare(b.name));
+        }
+
+        function assignPicker(p) {
+            const options = teamsWithRoom().map(t => `<option value="${esc(t.id)}">${esc(t.name)} (${openSpots(t)} open)</option>`).join('');
+            if (!options) return '<span class="text-xs text-slate-400">No open spots</span>';
+            return `<select onchange="if (this.value) fillTeam(this.value, { playerId: '${esc(p.playerId)}' })" class="w-full max-w-[11rem] text-xs border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-slate-700 focus:outline-none focus:border-brand-500">
+                <option value="">Assign to team…</option>${options}</select>`;
+        }
+
+        function confirmFillTeam(teamId) {
+            const team = teamById(teamId);
+            if (!team) return;
+            const open = openSpots(team);
+            const waiting = AppState.waitlist.length;
+            const suggested = Math.min(open, waiting);
+            showModal("Fill Open Spots",
+                `<div class="space-y-4 text-left">
+                    <p><b>${esc(team.name)}</b> has <b>${open}</b> open spot${open === 1 ? '' : 's'} and <b>${waiting}</b> free agent${waiting === 1 ? ' is' : 's are'} waiting. Free agents are added in sign-up order.</p>
+                    <label class="block">
+                        <span class="block text-xs font-semibold text-slate-700 mb-1">How many players to add?</span>
+                        <input type="number" id="fill-count" min="1" max="${suggested}" value="${suggested}" class="w-28 px-3 py-2 border rounded-lg border-slate-300 text-slate-900 focus:outline-none focus:border-brand-500">
+                    </label>
+                </div>`,
+                `<button onclick="fillTeam('${esc(teamId)}', { count: document.getElementById('fill-count').value })" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-semibold shadow-sm">Fill Spots</button>`);
+        }
+
+        async function fillTeam(teamId, opts) {
+            closeModal();
+            const res = await adminAction('fillTeam', { teamId, ...opts });
+            if (!res) return;
+            showModal("Players Added",
+                `Added to <b>${esc(res.teamName)}</b>:<ul class="list-disc list-inside my-3 text-sm text-slate-700">${res.added.map(n => `<li>${esc(n)}</li>`).join('')}</ul>
+                 <p class="text-xs text-slate-500">${res.openLeft} open spot${res.openLeft === 1 ? '' : 's'} left on the team · ${res.remaining} still on the waitlist</p>`);
         }
 
         function rosterTable(rows, { checkIn = true } = {}) {
@@ -1194,7 +1235,7 @@
                                 <th class="px-4 py-2.5 font-semibold">Email</th>
                                 <th class="px-4 py-2.5 font-semibold">Student ID</th>
                                 <th class="px-4 py-2.5 font-semibold">Phone</th>
-                                <th class="px-4 py-2.5 font-semibold">${checkIn ? 'Check-in' : ''}</th>
+                                <th class="px-4 py-2.5 font-semibold">${checkIn ? 'Check-in' : 'Assign'}</th>
                                 <th class="pl-2 pr-6 py-2.5"></th>
                             </tr>
                         </thead>
@@ -1223,7 +1264,7 @@
             const teams = [...AppState.teams].sort((a, b) => a.name.localeCompare(b.name));
 
             // The state is polled every few seconds; skip the rebuild when nothing on screen would change.
-            const signature = JSON.stringify([query, teams.map(t => [t.id, t.name, t.code, t.eliminated, teamStage(t).text, t.players]), AppState.waitlist]);
+            const signature = JSON.stringify([query, AppState.settings.maxTeamSize, teams.map(t => [t.id, t.name, t.code, t.eliminated, teamStage(t).text, t.players]), AppState.waitlist]);
             if (body.dataset.signature === signature) return;
             body.dataset.signature = signature;
 
@@ -1248,7 +1289,7 @@
                                     <h3 class="text-lg font-bold text-slate-900 ${team.eliminated ? 'line-through' : ''}">${esc(team.name)}</h3>
                                     <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${stage.cls}">${esc(stage.text)}</span>
                                 </div>
-                                <div class="text-xs text-slate-500 mt-1">Code <span class="font-mono font-semibold text-slate-700">${esc(team.code)}</span> · ${team.players.length} player${team.players.length === 1 ? '' : 's'}</div>
+                                <div class="text-xs text-slate-500 mt-1">Code <span class="font-mono font-semibold text-slate-700">${esc(team.code)}</span> · ${team.players.length}/${AppState.settings.maxTeamSize} players${!team.eliminated && openSpots(team) ? ` · <span class="text-amber-700 font-medium">${openSpots(team)} open</span>` : ''}</div>
                             </div>
                             <div class="flex flex-wrap items-center gap-x-5 gap-y-3">
                                 <div class="w-36">
@@ -1256,6 +1297,9 @@
                                     ${progressBar(checkedIn, team.players.length)}
                                 </div>
                                 <div class="flex items-center gap-1">
+                                    ${!team.eliminated && openSpots(team) > 0 && AppState.waitlist.length > 0
+                                        ? `<button onclick="confirmFillTeam('${esc(team.id)}')" title="Add free agents from the waitlist" class="px-3 py-1.5 whitespace-nowrap text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors">Fill ${openSpots(team)} open</button>`
+                                        : ''}
                                     <button onclick="checkInTeam('${esc(team.id)}')" class="px-3 py-1.5 whitespace-nowrap text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">Check in all</button>
                                     <button onclick="resetTeamCheckIn('${esc(team.id)}')" title="Clear check-ins" class="p-2 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors">${icon('reset')}</button>
                                     <button onclick="adminAddPlayerModal('${esc(team.id)}')" title="Add player" class="p-2 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors">${icon('plus')}</button>
