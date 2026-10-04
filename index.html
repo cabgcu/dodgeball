@@ -927,9 +927,15 @@
             const canvas = document.getElementById(canvasId);
             const headers = document.getElementById(headersId);
             if (!canvas || !headers) return;
-            canvas.innerHTML = ''; headers.innerHTML = '';
 
             if (!AppState.bracket || AppState.bracket.length === 0) buildBracketData();
+
+            // The state is re-polled every few seconds; only rebuild when something visible changed, so the bracket doesn't flicker.
+            const signature = JSON.stringify(AppState.bracket.map(round => round.map(mt =>
+                [mt.team1, mt.team2, mt.winner].map(t => t ? [t.id, t.name, t.eliminated] : null))));
+            if (canvas.dataset.signature === signature && canvas.childElementCount) return;
+            canvas.dataset.signature = signature;
+            canvas.innerHTML = ''; headers.innerHTML = '';
 
             const matches = AppState.bracket;
             const numRounds = matches.length;
@@ -981,7 +987,7 @@
                 matches[r].forEach((match, m) => {
                     const y = centerY(r, m);
                     const mDiv = document.createElement('div');
-                    mDiv.className = "absolute z-10 fade-in";
+                    mDiv.className = "absolute z-10";
                     mDiv.style.left = (r * colW) + 'px';
                     mDiv.style.top = y + 'px';
                     mDiv.style.width = cardW + 'px';
