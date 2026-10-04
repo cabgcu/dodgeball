@@ -97,6 +97,17 @@ Plan limits worth knowing for a 200–500 person event:
 - **Free projects pause after a week with no activity.** Open the dashboard or the site in the days
   before the event (or use Pro) so it isn't paused on game night.
 
+## Bracket layout and auto-fill
+
+When the number of teams isn't a power of two (4, 8, 16…), some teams get a bye and start in the
+second round. Byes are spread evenly across the bracket, so both halves are balanced and every
+team's first game has a real opponent: nobody plays an empty slot. Earlier sign-ups get the byes.
+
+**Auto-Process Free Agents** first tops up teams that are short, always giving the next person to
+the team with the fewest players, until each has the waitlist team size. If enough people are still
+waiting, it forms as many new teams as it can and deals everyone left across them, so the new teams
+are the same size (give or take one).
+
 ## Editing the bracket
 
 The bracket lays itself out in sign-up order and follows new teams until the first result is recorded.

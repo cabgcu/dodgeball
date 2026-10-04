@@ -316,22 +316,30 @@ language sql immutable as $$
 $$;
 
 /**
- * Fresh layout in sign-up order. Every first-round match gets one team before
- * any gets a second, so open slots are spread out and no match is empty on both sides.
+ * Fresh layout in sign-up order. When the team count isn't a power of two, the extra spots become
+ * byes: those teams start in the second round instead of facing an empty slot. Byes are spread evenly
+ * (bit-reversed order), so both halves of the bracket stay balanced and every team's first game has
+ * an opponent. First-round matches left with no teams are hidden on the site.
  */
 create or replace function app_private.rebuild_bracket() returns void
 language plpgsql as $$
 declare
-  n int;
+  ids text[] := array(select id from app_private.teams order by seq);
+  n int := coalesce(array_length(ids, 1), 0);
   k int := 0;
   num int;
-  first_count int;
+  half int;      -- first-round matches
+  games int;     -- first-round matches that are real games; the rest are byes
+  bits int;
+  rank int;
+  i int := 1;
   cnt int;
 begin
-  select count(*) into n from app_private.teams;
   while (1 << k) < greatest(2, n) loop k := k + 1; end loop;
   num := k + 1;
-  first_count := 1 << (num - 2);
+  half := 1 << (num - 2);
+  bits := num - 2;
+  games := case when n < 2 then half else n - half end;
 
   delete from app_private.matches where true;
   for r in 0 .. num - 1 loop
@@ -339,10 +347,20 @@ begin
     insert into app_private.matches (round, pos) select r, g from generate_series(0, cnt - 1) g;
   end loop;
 
-  with ordered as (select id, (row_number() over (order by seq)) - 1 as i from app_private.teams)
-  update app_private.matches m set team1_id = o.id from ordered o where m.round = 0 and o.i < first_count and m.pos = o.i;
-  with ordered as (select id, (row_number() over (order by seq)) - 1 as i from app_private.teams)
-  update app_private.matches m set team2_id = o.id from ordered o where m.round = 0 and o.i >= first_count and o.i < 2 * first_count and m.pos = o.i - first_count;
+  for m in 0 .. half - 1 loop
+    rank := 0;
+    for b in 0 .. bits - 1 loop
+      if (m >> b) & 1 = 1 then rank := rank | (1 << (bits - 1 - b)); end if;
+    end loop;
+    if rank < games then
+      update app_private.matches set team1_id = ids[i], team2_id = ids[i + 1] where round = 0 and pos = m;
+      i := i + 2;
+    else
+      if m % 2 = 0 then update app_private.matches set team1_id = ids[i] where round = 1 and pos = m / 2;
+      else update app_private.matches set team2_id = ids[i] where round = 1 and pos = m / 2; end if;
+      i := i + 1;
+    end if;
+  end loop;
 end $$;
 
 /** Keep the layout in step with the teams until the first result is recorded or an admin arranges it by hand. */
@@ -1001,44 +1019,72 @@ language sql stable as $$
   select * from app_private.players where team_id is null order by created_at, seq limit 1;
 $$;
 
+/**
+ * Places free agents evenly. First it tops up short teams, always giving the next person to the team
+ * with the fewest players, until every team has waitlist_team_size. Then, if enough people are left,
+ * it forms new teams and deals the remaining free agents across them so they're the same size (±1).
+ */
 create or replace function app_private.process_waitlist(p jsonb) returns jsonb
 language plpgsql as $$
 declare
-  target int := (app_private.settings_row()).waitlist_team_size;
+  s app_private.settings := app_private.settings_row();
+  target int := s.waitlist_team_size;
   t app_private.teams;
   fa app_private.players;
-  size int;
-  has_captain boolean;
   lines text[] := '{}';
   remaining int;
+  new_ids text[] := '{}';
+  k int;
+  idx int := 0;
+  tries int;
+  tid text;
 begin
   if not exists (select 1 from app_private.players where team_id is null) then
     perform app_private.fail('There are no free agents on the waitlist right now.');
   end if;
 
-  for t in select * from app_private.teams where not eliminated order by seq loop
-    select count(*), bool_or(role = 'Captain') into size, has_captain from app_private.players where team_id = t.id;
-    while size < target loop
-      fa := app_private.oldest_free_agent();
-      exit when fa.id is null;
-      update app_private.players set team_id = t.id, role = case when coalesce(has_captain, false) then 'Player' else 'Captain' end,
-        checked_in = false, updated_at = now() where id = fa.id;
-      has_captain := true;
-      size := size + 1;
-      lines := lines || ('Assigned ' || fa.name || ' to ' || t.name);
-    end loop;
+  -- 1) Top up short teams, smallest first.
+  loop
+    fa := app_private.oldest_free_agent();
+    exit when fa.id is null;
+    select tm.* into t from app_private.teams tm
+      where not tm.eliminated and (select count(*) from app_private.players pl where pl.team_id = tm.id) < least(target, s.max_team_size)
+      order by (select count(*) from app_private.players pl where pl.team_id = tm.id), tm.seq limit 1;
+    exit when not found;
+    update app_private.players set team_id = t.id,
+      role = case when exists (select 1 from app_private.players where team_id = t.id and role = 'Captain') then 'Player' else 'Captain' end,
+      checked_in = false, updated_at = now() where id = fa.id;
+    lines := lines || ('Assigned ' || fa.name || ' to ' || t.name);
   end loop;
 
-  while (select count(*) from app_private.players where team_id is null) >= target loop
-    insert into app_private.teams (name, code) values (app_private.unique_team_name('Waitlist Team'), app_private.unique_team_code())
-      returning * into t;
-    update app_private.players pl set team_id = t.id, role = case when x.rn = 1 then 'Captain' else 'Player' end,
-      checked_in = false, updated_at = now()
-    from (select id, row_number() over (order by created_at, seq) rn from app_private.players
-          where team_id is null order by created_at, seq limit target) x
-    where pl.id = x.id;
-    lines := lines || ('Created new team ' || t.name || ' (' || t.code || ') with ' || target || ' free agents.');
-  end loop;
+  -- 2) Enough left for new teams: make as many full teams as possible and deal everyone across them.
+  select count(*) into remaining from app_private.players where team_id is null;
+  k := remaining / target;
+  if k > 0 then
+    for i in 1 .. k loop
+      insert into app_private.teams (name, code) values (app_private.unique_team_name('Waitlist Team'), app_private.unique_team_code())
+        returning id into tid;
+      new_ids := new_ids || tid;
+    end loop;
+    for fa in select * from app_private.players where team_id is null order by created_at, seq loop
+      tries := 0;
+      -- Round-robin, skipping any team that's already at the size limit.
+      loop
+        tid := new_ids[(idx % k) + 1];
+        idx := idx + 1;
+        tries := tries + 1;
+        exit when (select count(*) from app_private.players where team_id = tid) < s.max_team_size or tries > k;
+      end loop;
+      exit when tries > k;
+      update app_private.players set team_id = tid,
+        role = case when exists (select 1 from app_private.players where team_id = tid and role = 'Captain') then 'Player' else 'Captain' end,
+        checked_in = false, updated_at = now() where id = fa.id;
+    end loop;
+    for t in select * from app_private.teams where id = any(new_ids) order by seq loop
+      lines := lines || ('Created new team ' || t.name || ' (' || t.code || ') with '
+        || (select count(*) from app_private.players where team_id = t.id) || ' free agents.');
+    end loop;
+  end if;
 
   perform app_private.sync_bracket();
   select count(*) into remaining from app_private.players where team_id is null;
