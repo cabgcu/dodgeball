@@ -538,7 +538,7 @@ begin
       perform app_private.assert_available('', v_sid, pre.id);
       update app_private.players set name = v_name, phone = v_phone, student_id = v_sid, updated_at = now() where id = pre.id;
       perform app_private.log('register:claim', v_name || ' <' || v_email || '> confirmed spot on ' || team.name);
-      return jsonb_build_object('message', 'You have confirmed your spot on "' || team.name || '"!', 'teamName', team.name);
+      return jsonb_build_object('message', 'You have confirmed your spot on "' || team.name || '"!', 'teamName', team.name, 'teamCode', team.code);
     end if;
 
     perform app_private.assert_available(v_email, v_sid);
@@ -549,7 +549,7 @@ begin
     insert into app_private.players (team_id, name, email, phone, student_id, role)
       values (team.id, v_name, v_email, v_phone, v_sid, 'Player');
     perform app_private.log('register:join', v_name || ' <' || v_email || '> joined ' || team.name);
-    return jsonb_build_object('message', 'You have successfully joined "' || team.name || '"!', 'teamName', team.name);
+    return jsonb_build_object('message', 'You have successfully joined "' || team.name || '"!', 'teamName', team.name, 'teamCode', team.code);
   end if;
 
   -- freeplay / waitlist
@@ -557,7 +557,8 @@ begin
   insert into app_private.players (team_id, name, email, phone, student_id, role)
     values (null, v_name, v_email, v_phone, v_sid, 'Player');
   perform app_private.log('register:waitlist', v_name || ' <' || v_email || '>');
-  return jsonb_build_object('message', 'You have been added to the waitlist! We will place you on a team if spots become available.');
+  return jsonb_build_object('message', 'You have been added to the waitlist! We will place you on a team if spots become available.',
+    'waitlistPosition', (select count(*) from app_private.players where team_id is null));
 end $$;
 
 -- ---------------------------------------------------------------------------
@@ -614,6 +615,17 @@ begin
   perform app_private.sync_bracket();
   return n;
 end $$;
+
+/** What a share link shows before someone joins: no roster, just the team and whether there's room. */
+create or replace function app_private.team_preview(p jsonb) returns jsonb
+language sql as $$
+  with t as (select * from app_private.team_by_code(p->>'teamCode'))
+  select jsonb_build_object('team', jsonb_build_object(
+    'name', t.name, 'code', t.code, 'eliminated', t.eliminated,
+    'playerCount', (select count(*) from app_private.players pl where pl.team_id = t.id),
+    'maxTeamSize', (app_private.settings_row()).max_team_size))
+  from t;
+$$;
 
 create or replace function app_private.team_lookup(p jsonb) returns jsonb
 language sql as $$
@@ -1059,12 +1071,13 @@ begin
     perform app_private.fail('Your admin session has expired. Please log in again.', 'DB401');
   end if;
   -- One write at a time keeps the "check, then write" logic race-free.
-  if action not in ('getState', 'teamLookup') then perform pg_advisory_xact_lock(727274); end if;
+  if action not in ('getState', 'teamLookup', 'teamPreview') then perform pg_advisory_xact_lock(727274); end if;
 
   case action
     when 'getState'         then result := '{}'::jsonb;
     when 'register'         then result := app_private.register(payload);
     when 'teamLookup'       then result := app_private.team_lookup(payload);
+    when 'teamPreview'      then result := app_private.team_preview(payload);
     when 'teamRemovePlayer' then result := app_private.team_remove_player(payload);
     when 'teamDelete'       then result := app_private.team_delete(payload);
     when 'login'            then result := app_private.login(payload);
