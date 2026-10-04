@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dodgeball After Dark | Admin & Registration</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
     <script>
         tailwind.config = {
@@ -361,12 +362,19 @@
 
     <script>
         // ============================================================
-        //  BACKEND CONFIG
-        //  Paste your Google Apps Script Web App URL (ends in /exec).
-        //  See apps-script/Code.gs for the one-time setup steps.
+        //  BACKEND CONFIG (Supabase). The publishable key is meant to be public;
+        //  never put the secret key here. See supabase/README.md for setup.
         // ============================================================
-        const API_URL = 'https://script.google.com/macros/s/AKfycbxvDibWxItq0Nj1DQNi2dZWHZtxp4AmILRJV8CVKVE1tz2NCvylypjKO4D2MgeOaUgZ8g/exec';
-        const POLL_MS = 5000;
+        const SUPABASE_URL = 'https://raraxpjsftqxhwkpwpab.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_p4FqN3nJTT5GFNU_xqZtYg_7fPtkKhS';
+
+        // Pages refresh when the database says something changed (Realtime). These
+        // slower polls are only a safety net, so hundreds of open phones stay cheap.
+        const POLL_LIVE_MS = 60000;     // Realtime connected
+        const POLL_OFFLINE_MS = 15000;  // Realtime unavailable
+        const POLL_ADMIN_MS = 10000;    // admin dashboard (check-ins don't trigger Realtime)
+
+        const sb = SUPABASE_URL && window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
         const AppState = {
             currentMode: 'create',
@@ -385,7 +393,8 @@
             managed: null,
             clockOffset: 0,
             busy: false,
-            loaded: false
+            loaded: false,
+            live: false
         };
 
         let requestSeq = 0;
@@ -399,19 +408,16 @@
         // ---------- API ----------
 
         async function api(action, payload = {}, { silent = false } = {}) {
-            if (!API_URL) {
-                if (!silent) showModal("Backend Not Connected", "Set <b>API_URL</b> in index.html to your Google Apps Script Web App URL.");
+            if (!sb) {
+                if (!silent) showModal("Backend Not Connected", "Set <b>SUPABASE_URL</b> and <b>SUPABASE_KEY</b> in index.html.");
                 throw new Error('NO_API');
             }
             const seq = ++requestSeq;
             let res;
             try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ action, payload, token: AppState.adminToken })
-                });
-                res = await response.json();
+                const { data, error } = await sb.rpc('dodgeball_api', { action, payload, token: AppState.adminToken });
+                if (error) throw error;
+                res = data;
             } catch (err) {
                 if (!silent) showModal("Connection Problem", "Could not reach the tournament server. Check your connection and try again.");
                 throw err;
@@ -429,8 +435,41 @@
         }
 
         async function loadState() {
-            if (!API_URL) return;
+            if (!sb) return;
             try { await api('getState', {}, { silent: true }); } catch (e) { /* retry on next poll */ }
+        }
+
+        // Realtime nudges arrive for every viewer at once; spread the refetches out a little.
+        let refreshTimer = null;
+        function scheduleRefresh() {
+            if (refreshTimer) return;
+            refreshTimer = setTimeout(() => { refreshTimer = null; loadState(); }, 200 + Math.random() * 1500);
+        }
+
+        function adminDashboardVisible() {
+            return !!AppState.adminToken
+                && !document.getElementById('view-admin').classList.contains('hidden')
+                && !document.getElementById('admin-dashboard-area').classList.contains('hidden');
+        }
+
+        let lastPoll = 0;
+        function pollTick() {
+            if (document.hidden) return;
+            const every = adminDashboardVisible() ? POLL_ADMIN_MS : (AppState.live ? POLL_LIVE_MS : POLL_OFFLINE_MS);
+            if (Date.now() - lastPoll >= every) {
+                lastPoll = Date.now();
+                loadState();
+            }
+        }
+
+        function subscribeToChanges() {
+            sb.channel('dodgeball-state')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'state_version' }, scheduleRefresh)
+                .subscribe(status => {
+                    const wasLive = AppState.live;
+                    AppState.live = status === 'SUBSCRIBED';
+                    if (AppState.live && !wasLive) scheduleRefresh(); // catch anything missed while disconnected
+                });
         }
 
         async function adminAction(action, payload = {}) {
@@ -1575,7 +1614,7 @@
         function showSetupBanner() {
             const banner = document.createElement('div');
             banner.className = "w-full bg-amber-500 text-slate-900 text-sm font-bold text-center px-4 py-2";
-            banner.innerHTML = "Backend not connected: set <code class=\"bg-amber-200 px-1 rounded\">API_URL</code> in index.html to your Google Apps Script Web App URL (see apps-script/Code.gs).";
+            banner.innerHTML = "Backend not connected: set <code class=\"bg-amber-200 px-1 rounded\">SUPABASE_URL</code> and <code class=\"bg-amber-200 px-1 rounded\">SUPABASE_KEY</code> in index.html (see supabase/README.md).";
             document.body.prepend(banner);
         }
 
@@ -1589,16 +1628,18 @@
             updateAllBrackets();
             renderSettings();
 
-            if (!API_URL) {
+            if (!sb) {
                 showSetupBanner();
                 return;
             }
 
             if (location.hash === '#projector') enterProjectorMode();
             loadState();
+            lastPoll = Date.now();
+            subscribeToChanges();
             setInterval(tickTimers, 1000);
-            setInterval(() => { if (!document.hidden) loadState(); }, POLL_MS);
-            document.addEventListener('visibilitychange', () => { if (!document.hidden) loadState(); });
+            setInterval(pollTick, 1000);
+            document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastPoll = Date.now(); loadState(); } });
         }
 
         window.onload = init;
