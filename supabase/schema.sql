@@ -152,7 +152,9 @@ create table if not exists app_private.email_config (
   site_url       text   -- the sign-up page; share links in emails point here
 );
 alter table app_private.email_config add column if not exists event_when  text not null default 'Oct 20, 2026 &nbsp;&bull;&nbsp; 8:00 PM - 10:00 PM';
-alter table app_private.email_config add column if not exists event_where text not null default 'LPC';
+alter table app_private.email_config add column if not exists event_where text not null default 'Antelope Gym';
+alter table app_private.email_config alter column event_where set default 'Antelope Gym';
+update app_private.email_config set event_where = 'Antelope Gym' where event_where = 'LPC';
 alter table app_private.email_config add column if not exists event_blurb text not null default 'Compete in a high stakes glow in the dark dodgeball tournament with exciting prizes!';
 insert into app_private.email_config default values on conflict do nothing;
 
