@@ -79,6 +79,7 @@
         <div class="mb-4 sm:mb-6 w-full max-w-6xl flex justify-center gap-1.5 sm:gap-4">
             <button id="tab-register" onclick="switchView('register')" class="flex-1 sm:flex-none whitespace-nowrap text-sm sm:text-base px-2 sm:px-6 py-3 rounded-t-lg bg-white shadow-md text-brand-600 font-bold border-t-4 border-brand-600 focus:outline-none transition-all"><span class="sm:hidden">Register</span><span class="hidden sm:inline">Registration</span></button>
             <button id="tab-bracket" onclick="switchView('bracket')" class="flex-1 sm:flex-none whitespace-nowrap text-sm sm:text-base px-2 sm:px-6 py-3 rounded-t-lg bg-slate-200 text-slate-600 font-medium hover:bg-slate-300 focus:outline-none transition-all border-t-4 border-transparent"><span class="sm:hidden">Bracket</span><span class="hidden sm:inline">Live Bracket</span></button>
+            <button id="tab-rules" onclick="switchView('rules')" class="flex-1 sm:flex-none whitespace-nowrap text-sm sm:text-base px-2 sm:px-6 py-3 rounded-t-lg bg-slate-200 text-slate-600 font-medium hover:bg-slate-300 focus:outline-none transition-all border-t-4 border-transparent">Rules</button>
             <button id="tab-admin" onclick="switchView('admin')" class="flex-1 sm:flex-none whitespace-nowrap text-sm sm:text-base px-2 sm:px-6 py-3 rounded-t-lg bg-slate-200 text-slate-600 font-medium hover:bg-slate-300 focus:outline-none transition-all border-t-4 border-transparent flex items-center justify-center gap-1.5 sm:gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" /></svg>
                 <span class="sm:hidden">Admin</span><span class="hidden sm:inline">Admin Control</span>
@@ -95,7 +96,7 @@
                     <div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 sm:gap-8 text-slate-100 text-sm sm:text-lg font-bold drop-shadow-lg mt-2 sm:mt-0 mb-3 bg-black/40 px-4 sm:px-6 py-2 rounded-2xl sm:rounded-full backdrop-blur-sm border border-slate-700">
                         <span class="flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-brand-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" /></svg> Oct 20, 2026</span>
                         <span class="flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-brand-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" /></svg> 8:00 PM - 10:00 PM</span>
-                        <span class="flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-brand-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" /></svg> LPC</span>
+                        <span class="flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-brand-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" /></svg> Antelope Gym</span>
                     </div>
                     <p class="text-slate-200 text-sm sm:text-base font-medium drop-shadow-md max-w-2xl bg-black/30 px-4 py-1 rounded">Compete in a high stakes glow in the dark dodgeball tournament with exciting prizes!</p>
                 </div>
@@ -232,6 +233,133 @@
                         <div id="bracket-headers" class="relative h-12 mb-4 w-full"></div>
                         <div id="bracket-canvas" class="relative w-full flex-1"></div>
                     </div>
+                </div>
+            </div>
+
+            <!-- VIEW: RULES -->
+            <div id="view-rules" class="hidden p-4 sm:p-10">
+                <div class="text-center mb-8">
+                    <h2 class="text-3xl sm:text-4xl font-black text-slate-900 mb-2 uppercase italic">Dodgeball Rules</h2>
+                    <p class="text-slate-500 text-sm sm:text-base">Know these before you step on the court.</p>
+                </div>
+                <div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                    <section class="bg-slate-50 p-5 sm:p-6 rounded-xl border border-slate-200">
+                        <h3 class="text-lg font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2"><span class="text-brand-600">1.</span> Teams and Tournament Format</h3>
+                        <ul class="list-disc pl-5 space-y-1.5 text-sm text-slate-600 marker:text-brand-500">
+                            <li>Teams may have up to 10 players, with 8 players on the court and up to 2 reserves on the bench.</li>
+                            <li>Reserves may substitute before a round or during an injury stoppage with referee approval. They also can enter through catches so long as your team does not exceed the maximum number of 8 players on the court at a time.</li>
+                            <li>The tournament is single elimination: one loss eliminates your team.</li>
+                            <li>Each matchup consists of one 10-minute round.</li>
+                        </ul>
+                    </section>
+                    <section class="bg-slate-50 p-5 sm:p-6 rounded-xl border border-slate-200">
+                        <h3 class="text-lg font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2"><span class="text-brand-600">2.</span> Objective and Time Limit</h3>
+                        <ul class="list-disc pl-5 space-y-1.5 text-sm text-slate-600 marker:text-brand-500">
+                            <li>Eliminate every opposing player to win.</li>
+                            <li>If time expires, the team with more active players remaining wins.</li>
+                            <li>If both teams have the same number remaining, the round moves to sudden death.</li>
+                        </ul>
+                    </section>
+                    <section class="bg-slate-50 p-5 sm:p-6 rounded-xl border border-slate-200">
+                        <h3 class="text-lg font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2"><span class="text-brand-600">3.</span> Court and Equipment</h3>
+                        <ul class="list-disc pl-5 space-y-1.5 text-sm text-slate-600 marker:text-brand-500">
+                            <li>Use foam dodgeballs and clearly marked sidelines, end lines, and a center line.</li>
+                            <li>Place eight balls along the center line.</li>
+                            <li>Players must wear closed-toe athletic shoes and remove jewelry or accessories that could cause injury.</li>
+                        </ul>
+                    </section>
+                    <section class="bg-slate-50 p-5 sm:p-6 rounded-xl border border-slate-200">
+                        <h3 class="text-lg font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2"><span class="text-brand-600">4.</span> Opening Rush</h3>
+                        <ul class="list-disc pl-5 space-y-1.5 text-sm text-slate-600 marker:text-brand-500">
+                            <li>Players begin behind their team’s end line.</li>
+                            <li>At the whistle, teams may race to retrieve any ball.</li>
+                            <li>Players may reach for balls on the center line but may not step on or cross the line.</li>
+                            <li>Before throwing, players must bring retrieved balls behind their team’s designated activation line.</li>
+                            <li>Pushing, sliding into opponents, or other physical contact is prohibited.</li>
+                        </ul>
+                    </section>
+                    <section class="bg-slate-50 p-5 sm:p-6 rounded-xl border border-slate-200">
+                        <h3 class="text-lg font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2"><span class="text-brand-600">5.</span> Getting Out</h3>
+                        <p class="text-sm font-medium text-slate-700 mb-2">A player is out when they:</p>
+                        <ul class="list-disc pl-5 space-y-1.5 text-sm text-slate-600 marker:text-brand-500">
+                            <li>Are hit by a live ball and it touches the ground before a teammate catches it.</li>
+                            <li>Throw a ball that an opponent catches while it is still live.</li>
+                            <li>Step on or cross the center line.</li>
+                            <li>Step outside the court to avoid a throw.</li>
+                            <li>Drop a ball they are holding because an incoming throw knocks it loose.</li>
+                        </ul>
+                        <p class="text-sm font-medium text-slate-700 mt-3">Players who are out must raise a hand and leave the court promptly.</p>
+                    </section>
+                    <section class="bg-slate-50 p-5 sm:p-6 rounded-xl border border-slate-200">
+                        <h3 class="text-lg font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2"><span class="text-brand-600">6.</span> Live Balls and Catches</h3>
+                        <ul class="list-disc pl-5 space-y-1.5 text-sm text-slate-600 marker:text-brand-500">
+                            <li>A thrown ball remains live until it touches the ground, wall, ceiling, or another ball.</li>
+                            <li>A ball that hits a player and is then caught by that player or a teammate counts as a catch, provided it does not touch the ground first.</li>
+                            <li>A successful catch eliminates the thrower, saves any teammates hit by that throw, and brings back one eliminated player.</li>
+                            <li>If a ball hits multiple players and then touches the ground, all players hit are out.</li>
+                            <li>The catcher must control the ball while remaining in bounds.</li>
+                            <li>Eliminated players return in the order they were eliminated and enter through their own end line.</li>
+                        </ul>
+                    </section>
+                    <section class="bg-slate-50 p-5 sm:p-6 rounded-xl border border-slate-200">
+                        <h3 class="text-lg font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2"><span class="text-brand-600">7.</span> Blocking</h3>
+                        <ul class="list-disc pl-5 space-y-1.5 text-sm text-slate-600 marker:text-brand-500">
+                            <li>Players may use a ball they are holding to block incoming throws.</li>
+                            <li>A blocked ball becomes dead immediately.</li>
+                            <li>If the impact knocks the blocking ball out of the player’s hands, that player is out.</li>
+                            <li>A hit to the hand holding a ball counts as a hit to the ball.</li>
+                        </ul>
+                    </section>
+                    <section class="bg-slate-50 p-5 sm:p-6 rounded-xl border border-slate-200">
+                        <h3 class="text-lg font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2"><span class="text-brand-600">8.</span> Headshots and Safe Play</h3>
+                        <ul class="list-disc pl-5 space-y-1.5 text-sm text-slate-600 marker:text-brand-500">
+                            <li>A direct hit to the head or face does not eliminate the player hit. The ball becomes dead.</li>
+                            <li>Deliberate headshots, reckless throws, and physical contact are prohibited.</li>
+                            <li>Do not throw at players who are already out.</li>
+                            <li>Referees may warn, eliminate, or remove players for unsafe behavior.</li>
+                            <li>Play stops immediately for an injury.</li>
+                            <li>If bench players get involved and throw a ball at an opposing team, referees may ask that team to go down a player.</li>
+                        </ul>
+                    </section>
+                    <section class="bg-slate-50 p-5 sm:p-6 rounded-xl border border-slate-200">
+                        <h3 class="text-lg font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2"><span class="text-brand-600">9.</span> Boundaries and Ball Retrieval</h3>
+                        <ul class="list-disc pl-5 space-y-1.5 text-sm text-slate-600 marker:text-brand-500">
+                            <li>Active players must stay in bounds and on their own side.</li>
+                            <li>Reserves and eliminated players may retrieve stray balls outside the court and roll them back to their team.</li>
+                            <li>Ball retrievers may not enter the court, interfere with opponents, or catch live throws.</li>
+                            <li>Active players may only leave the court on their own end line when retrieving a dead ball. Players must promptly return to the court when retrieving a ball and can still get out if hit by a live ball.</li>
+                        </ul>
+                    </section>
+                    <section class="bg-slate-50 p-5 sm:p-6 rounded-xl border border-slate-200">
+                        <h3 class="text-lg font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2"><span class="text-brand-600">10.</span> Keeping the Game Moving</h3>
+                        <ul class="list-disc pl-5 space-y-1.5 text-sm text-slate-600 marker:text-brand-500">
+                            <li>Players may hold a ball for no more than 10 seconds.</li>
+                            <li>Referees will give an audible countdown.</li>
+                            <li>Failure to throw results in that ball being transferred to the opposing team.</li>
+                            <li>Intentionally wasting time may result in a warning or player elimination for repeated violations.</li>
+                        </ul>
+                    </section>
+                    <section class="bg-slate-50 p-5 sm:p-6 rounded-xl border border-slate-200">
+                        <h3 class="text-lg font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2"><span class="text-brand-600">11.</span> Sudden Death</h3>
+                        <p class="text-sm font-medium text-slate-700 mb-2">If the score is tied after 10 minutes:</p>
+                        <ul class="list-disc pl-5 space-y-1.5 text-sm text-slate-600 marker:text-brand-500">
+                            <li>Only players still active remain on the court.</li>
+                            <li>Teams begin with an equal number of balls.</li>
+                            <li>Catches still eliminate the thrower and save teammates hit by that throw, but no eliminated players return.</li>
+                            <li>The first elimination determines the winner.</li>
+                            <li>If both teams lose a player simultaneously, play continues until one team has fewer active players.</li>
+                        </ul>
+                    </section>
+                    <section class="bg-slate-50 p-5 sm:p-6 rounded-xl border border-slate-200">
+                        <h3 class="text-lg font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2"><span class="text-brand-600">12.</span> Sportsmanship and Officiating</h3>
+                        <ul class="list-disc pl-5 space-y-1.5 text-sm text-slate-600 marker:text-brand-500">
+                            <li>Play honestly and call yourself out.</li>
+                            <li>Only captains may ask for clarification during a stoppage.</li>
+                            <li>Arguing, taunting, and interference from the bench are prohibited.</li>
+                            <li>Referee decisions are final.</li>
+                            <li>Referees reserve the rights to eliminate a team from the bracket for any reason.</li>
+                        </ul>
+                    </section>
                 </div>
             </div>
 
@@ -563,10 +691,12 @@
         function switchView(view) {
             document.getElementById('view-register').classList.add('hidden');
             document.getElementById('view-bracket').classList.add('hidden');
+            document.getElementById('view-rules').classList.add('hidden');
             document.getElementById('view-admin').classList.add('hidden');
 
             document.getElementById('tab-register').className = "flex-1 sm:flex-none whitespace-nowrap text-sm sm:text-base px-2 sm:px-6 py-3 rounded-t-lg bg-slate-200 text-slate-600 font-medium hover:bg-slate-300 focus:outline-none transition-all border-t-4 border-transparent";
             document.getElementById('tab-bracket').className = "flex-1 sm:flex-none whitespace-nowrap text-sm sm:text-base px-2 sm:px-6 py-3 rounded-t-lg bg-slate-200 text-slate-600 font-medium hover:bg-slate-300 focus:outline-none transition-all border-t-4 border-transparent";
+            document.getElementById('tab-rules').className = "flex-1 sm:flex-none whitespace-nowrap text-sm sm:text-base px-2 sm:px-6 py-3 rounded-t-lg bg-slate-200 text-slate-600 font-medium hover:bg-slate-300 focus:outline-none transition-all border-t-4 border-transparent";
             document.getElementById('tab-admin').className = "flex-1 sm:flex-none whitespace-nowrap text-sm sm:text-base px-2 sm:px-6 py-3 rounded-t-lg bg-slate-200 text-slate-600 font-medium hover:bg-slate-300 focus:outline-none transition-all border-t-4 border-transparent flex items-center justify-center gap-1.5 sm:gap-2";
 
             if (view === 'register') {
@@ -577,6 +707,9 @@
                 document.getElementById('tab-bracket').className = "flex-1 sm:flex-none whitespace-nowrap text-sm sm:text-base px-2 sm:px-6 py-3 rounded-t-lg bg-white shadow-md text-brand-600 font-bold border-t-4 border-brand-600 focus:outline-none transition-all";
                 updateAllBrackets();
                 loadState();
+            } else if (view === 'rules') {
+                document.getElementById('view-rules').classList.remove('hidden');
+                document.getElementById('tab-rules').className = "flex-1 sm:flex-none whitespace-nowrap text-sm sm:text-base px-2 sm:px-6 py-3 rounded-t-lg bg-white shadow-md text-brand-600 font-bold border-t-4 border-brand-600 focus:outline-none transition-all";
             } else if (view === 'admin') {
                 document.getElementById('view-admin').classList.remove('hidden');
                 document.getElementById('tab-admin').className = "flex-1 sm:flex-none whitespace-nowrap text-sm sm:text-base px-2 sm:px-6 py-3 rounded-t-lg bg-white shadow-md text-brand-600 font-bold border-t-4 border-brand-600 focus:outline-none transition-all flex items-center justify-center gap-1.5 sm:gap-2";
