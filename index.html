@@ -94,7 +94,7 @@
                 <div class="relative sm:absolute sm:inset-0 flex flex-col items-center justify-center text-white text-center px-4 py-7 sm:py-0 bg-gradient-to-t from-black/95 via-black/50 to-black/20">
                     <h1 class="text-[2.5rem] leading-none sm:text-6xl font-black tracking-tighter mb-2 text-white drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] uppercase italic text-brand-500">Dodgeball <span class="text-white">After Dark</span></h1>
                     <div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 sm:gap-8 text-slate-100 text-sm sm:text-lg font-bold drop-shadow-lg mt-2 sm:mt-0 mb-3 bg-black/40 px-4 sm:px-6 py-2 rounded-2xl sm:rounded-full backdrop-blur-sm border border-slate-700">
-                        <span class="flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-brand-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" /></svg> Oct 20, 2026</span>
+                        <span class="flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-brand-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" /></svg> Oct 22, 2026</span>
                         <span class="flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-brand-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" /></svg> 8:00 PM - 10:00 PM</span>
                         <span class="flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-brand-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" /></svg> Antelope Gym</span>
                     </div>
@@ -448,6 +448,19 @@
                                     <p class="text-sm text-slate-500 mt-1">Fill teams that are short on players with free agents, or form new teams when enough are waiting.</p>
                                 </div>
                                 <button onclick="processWaitlist()" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors shrink-0">Auto-Process Free Agents</button>
+                            </div>
+
+                            <!-- Email Everyone -->
+                            <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                                <h3 class="text-lg font-bold text-slate-900">Email Everyone</h3>
+                                <p class="text-sm text-slate-500 mt-1 mb-4">Sends this message to every player with an email address: teams, invited teammates and the waitlist. Each email also shows the When / Where box.</p>
+                                <div class="space-y-3">
+                                    <input type="text" id="announce-subject" maxlength="150" value="Update: Dodgeball After Dark is Oct 22 at Antelope Gym" class="input-transition block w-full rounded-md border border-slate-300 px-4 py-2.5 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50">
+                                    <textarea id="announce-message" rows="4" maxlength="3000" class="input-transition block w-full rounded-md border border-slate-300 px-4 py-2.5 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50">we got the event details wrong when you signed up. Dodgeball After Dark is on Thursday, October 22, from 8:00 PM to 10:00 PM at Antelope Gym. Your registration and team are unchanged, so you don't need to do anything. See you there!</textarea>
+                                    <div class="flex justify-end">
+                                        <button onclick="confirmEmailEveryone()" class="px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors">Send to Everyone</button>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Bracket Controls -->
@@ -1574,6 +1587,32 @@
                 : `Not enough waitlist players to form a new team (${AppState.settings.waitlistTeamSize} required), and all existing teams have at least ${AppState.settings.waitlistTeamSize} players.`;
 
             showModal("Waitlist Processed", message);
+        }
+
+        function announcementRecipients() {
+            const players = AppState.teams.flatMap(t => t.players || []).concat(AppState.waitlist || []);
+            return new Set(players.map(p => (p.email || '').trim().toLowerCase()).filter(Boolean)).size;
+        }
+
+        function confirmEmailEveryone() {
+            const subject = document.getElementById('announce-subject').value.trim();
+            const message = document.getElementById('announce-message').value.trim();
+            if (!subject || !message) {
+                showModal("Message Needed", "Enter a subject and a message first.");
+                return;
+            }
+            const count = announcementRecipients();
+            showModal("Email Everyone?", `This sends <b>${esc(subject)}</b> to <b>${count}</b> ${count === 1 ? 'person' : 'people'}. Press it once: sending again emails everyone again.`,
+            `<button onclick="emailEveryone()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-bold shadow">Send ${count} Email${count === 1 ? '' : 's'}</button>`);
+        }
+
+        async function emailEveryone() {
+            closeModal();
+            const res = await adminAction('emailEveryone', {
+                subject: document.getElementById('announce-subject').value,
+                message: document.getElementById('announce-message').value
+            });
+            if (res) showModal("Emails Sent", `Queued ${res.sent} email${res.sent === 1 ? '' : 's'}.` + (res.failed ? ` ${res.failed} couldn't be queued (see the <b>email:error</b> rows in event_log).` : ''));
         }
 
         function confirmResetBracket() {
