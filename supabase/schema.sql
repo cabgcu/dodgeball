@@ -151,7 +151,9 @@ create table if not exists app_private.email_config (
   sender_name    text not null default 'Dodgeball After Dark',
   site_url       text   -- the sign-up page; share links in emails point here
 );
-alter table app_private.email_config add column if not exists event_when  text not null default 'Oct 20, 2026 &nbsp;&bull;&nbsp; 8:00 PM - 10:00 PM';
+alter table app_private.email_config add column if not exists event_when  text not null default 'Oct 22, 2026 &nbsp;&bull;&nbsp; 8:00 PM - 10:00 PM';
+alter table app_private.email_config alter column event_when set default 'Oct 22, 2026 &nbsp;&bull;&nbsp; 8:00 PM - 10:00 PM';
+update app_private.email_config set event_when = replace(event_when, 'Oct 20, 2026', 'Oct 22, 2026') where event_when like 'Oct 20, 2026%';
 alter table app_private.email_config add column if not exists event_where text not null default 'Antelope Gym';
 alter table app_private.email_config alter column event_where set default 'Antelope Gym';
 update app_private.email_config set event_where = 'Antelope Gym' where event_where = 'LPC';
@@ -1461,6 +1463,45 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+--  Announcement to everyone signed up (admin)
+-- ---------------------------------------------------------------------------
+
+/**
+ * Emails every player with an email address (teams, invitees and the waitlist) once each.
+ * subject and message are plain text; the When / Where box from email_config is added below the message.
+ */
+create or replace function app_private.email_everyone(p jsonb) returns jsonb
+language plpgsql as $$
+declare
+  subj text := app_private.clean_text(p->>'subject', 150);
+  msg text := left(btrim(coalesce(p->>'message', '')), 3000);
+  body text;
+  r record;
+  sent int := 0;
+  failed int := 0;
+begin
+  if coalesce((select brevo_api_key from app_private.email_config where id = 1), '') = '' then
+    perform app_private.fail('Emails are off. Set the Brevo key first (see supabase/README.md).');
+  end if;
+  if subj = '' or msg = '' then perform app_private.fail('Enter a subject and a message.'); end if;
+  body := replace(app_private.html(msg), E'\n', '<br>');
+
+  for r in
+    select distinct on (lower(email)) email, name from app_private.players
+    where email <> '' order by lower(email), seq
+  loop
+    if app_private.send_email(r.email, r.name, subj,
+         app_private.email_html(subj, 'Hi ' || app_private.html(r.name) || ', ' || body, '[]'::jsonb)) then
+      sent := sent + 1;
+    else
+      failed := failed + 1;
+    end if;
+  end loop;
+  perform app_private.log('email:announcement', sent || ' sent, ' || failed || ' failed: ' || subj, 'admin');
+  return jsonb_build_object('sent', sent, 'failed', failed);
+end $$;
+
+-- ---------------------------------------------------------------------------
 --  The one public entry point
 -- ---------------------------------------------------------------------------
 
@@ -1473,7 +1514,7 @@ declare
   is_admin boolean;
   result jsonb;
   admin_actions constant text[] := array['setSetting', 'processWaitlist', 'fillTeam', 'resetBracket', 'addTeam', 'renameTeam', 'addPlayer',
-    'removePlayer', 'deleteTeam', 'toggleCheckIn', 'setTeamCheckIn', 'advanceTeam', 'undoAdvance', 'setBracketSlot', 'timer'];
+    'removePlayer', 'deleteTeam', 'toggleCheckIn', 'setTeamCheckIn', 'advanceTeam', 'undoAdvance', 'setBracketSlot', 'timer', 'emailEveryone'];
 begin
   payload := coalesce(payload, '{}'::jsonb);
   is_admin := app_private.check_admin(token);
@@ -1509,6 +1550,7 @@ begin
     when 'undoAdvance'      then result := app_private.undo_advance(payload);
     when 'setBracketSlot'   then result := app_private.set_bracket_slot(payload);
     when 'timer'            then result := app_private.timer_action(payload);
+    when 'emailEveryone'    then result := app_private.email_everyone(payload);
     else perform app_private.fail('Unknown action: ' || coalesce(action, ''));
   end case;
 

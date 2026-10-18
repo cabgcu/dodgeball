@@ -50,7 +50,7 @@ Change them there when the details change (they're HTML, so `&bull;` and `&amp;`
 
 ```sql
 update app_private.email_config set
-  event_when  = 'Oct 20, 2026 &nbsp;&bull;&nbsp; 8:00 PM - 10:00 PM',
+  event_when  = 'Oct 22, 2026 &nbsp;&bull;&nbsp; 8:00 PM - 10:00 PM',
   event_where = 'Antelope Gym',
   event_blurb = 'Compete in a high stakes glow in the dark dodgeball tournament with exciting prizes!'
 where id = 1;
