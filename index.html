@@ -36,13 +36,30 @@
         
         /* Projector Mode Styles */
         #view-projection {
-            background-image: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+            background-color: #05010f;
+            background-image:
+                radial-gradient(ellipse at 15% 0%, rgba(232, 121, 249, 0.22) 0%, transparent 55%),
+                radial-gradient(ellipse at 85% 100%, rgba(34, 211, 238, 0.2) 0%, transparent 55%),
+                linear-gradient(rgba(168, 85, 247, 0.07) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(168, 85, 247, 0.07) 1px, transparent 1px);
+            background-size: 100% 100%, 100% 100%, 48px 48px, 48px 48px;
         }
         .projector-timer { text-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
 
+        /* Neon projector screen */
+        #view-projection .neon-title { color: #fff; text-shadow: 0 0 6px #fff, 0 0 18px #22d3ee, 0 0 40px #22d3ee; }
+        #view-projection .neon-title-accent { color: #ff4fa3; text-shadow: 0 0 6px #ff4fa3, 0 0 18px #ff2d95, 0 0 40px #ff2d95; }
+        #view-projection .neon-btn { background: rgba(5, 1, 15, 0.6); color: #a5f3fc; border: 2px solid #22d3ee; text-shadow: 0 0 6px rgba(34, 211, 238, 0.8); box-shadow: 0 0 10px rgba(34, 211, 238, 0.6), inset 0 0 8px rgba(34, 211, 238, 0.25); }
+        #view-projection .neon-btn:hover { background: rgba(34, 211, 238, 0.15); box-shadow: 0 0 16px #22d3ee, inset 0 0 12px rgba(34, 211, 238, 0.4); }
+        #view-projection .neon-panel { background: rgba(5, 1, 15, 0.55); border: 2px solid #a855f7; box-shadow: 0 0 18px rgba(168, 85, 247, 0.8), 0 0 50px rgba(168, 85, 247, 0.35), inset 0 0 30px rgba(168, 85, 247, 0.2); }
+        #view-projection .neon-timer-box { background: rgba(5, 1, 15, 0.7); border: 2px solid #e879f9; box-shadow: 0 0 12px rgba(232, 121, 249, 0.7), inset 0 0 10px rgba(232, 121, 249, 0.25); }
+        #view-projection .neon-timer-label { color: #f5d0fe; text-shadow: 0 0 6px rgba(232, 121, 249, 0.9); }
+        #view-projection .neon-timer { color: #cffafe; text-shadow: 0 0 6px #22d3ee, 0 0 20px #22d3ee; }
+        #view-projection .neon-timer-live { color: #ffd1e8; text-shadow: 0 0 6px #ff4fa3, 0 0 20px #ff2d95, 0 0 40px #ff2d95; }
+
         /* Neon projector bracket */
         #view-projection .neon-header { color: #67e8f9; text-shadow: 0 0 6px rgba(34, 211, 238, 0.9), 0 0 18px rgba(34, 211, 238, 0.6); }
-        #view-projection .neon-line { background: #f0abfc; box-shadow: 0 0 6px #e879f9, 0 0 14px #e879f9, 0 0 24px rgba(232, 121, 249, 0.6); }
+        #view-projection .neon-line { background: #f5d0fe; box-shadow: 0 0 4px #fff, 0 0 10px #e879f9, 0 0 20px #e879f9, 0 0 32px rgba(232, 121, 249, 0.7); }
         #view-projection .neon-card { background: rgba(10, 15, 35, 0.92); border-color: #22d3ee; box-shadow: 0 0 8px #22d3ee, 0 0 22px rgba(34, 211, 238, 0.55), inset 0 0 12px rgba(34, 211, 238, 0.25); }
         #view-projection .neon-divider { border-color: rgba(34, 211, 238, 0.5); }
         #view-projection .neon-team { color: #f8fafc; text-shadow: 0 0 6px rgba(255, 255, 255, 0.45); }
@@ -524,14 +541,14 @@
     <!-- Projector View (Hidden by default) -->
     <div id="view-projection" class="hidden h-screen overflow-hidden flex flex-col items-center p-6">
         <div class="w-full flex justify-between items-center gap-6 mb-6 shrink-0">
-            <h1 class="text-6xl font-black text-white uppercase italic drop-shadow-2xl">Dodgeball <span class="text-brand-500">After Dark</span></h1>
+            <h1 class="text-6xl font-black uppercase italic neon-title">Dodgeball <span class="neon-title-accent">After Dark</span></h1>
             <div class="flex gap-8" id="projection-timers-container"></div>
             <div class="flex gap-3">
-                <button onclick="toggleFullscreen()" class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg border border-slate-600 transition-colors shadow-lg">Full Screen</button>
-                <button onclick="closeProjectorMode()" class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg border border-slate-600 transition-colors shadow-lg">Exit Projector</button>
+                <button onclick="toggleFullscreen()" class="px-6 py-3 font-bold rounded-lg transition-colors neon-btn">Full Screen</button>
+                <button onclick="closeProjectorMode()" class="px-6 py-3 font-bold rounded-lg transition-colors neon-btn">Exit Projector</button>
             </div>
         </div>
-        <div id="proj-bracket-panel" class="w-full flex-1 min-h-0 overflow-hidden flex items-center justify-center bg-slate-800/50 p-6 rounded-3xl border border-slate-700 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+        <div id="proj-bracket-panel" class="w-full flex-1 min-h-0 overflow-hidden flex items-center justify-center p-6 rounded-3xl neon-panel">
             <div id="proj-bracket-sizer" class="relative shrink-0">
                 <div id="proj-bracket-inner" class="absolute top-0 left-0 w-max">
                     <div id="proj-bracket-headers" class="relative h-16 mb-8 w-full"></div>
@@ -2119,10 +2136,10 @@
                     let running = t.isRunning && left > 0;
 
                     let div = document.createElement('div');
-                    div.className = "flex flex-col items-center bg-slate-900/80 px-6 py-2 rounded-xl border border-slate-700 shadow-inner";
+                    div.className = "flex flex-col items-center px-6 py-2 rounded-xl neon-timer-box";
                     div.innerHTML = `
-                        <span class="text-xs font-bold text-slate-400 tracking-widest uppercase mb-1">${esc(t.name)}</span>
-                        <span data-timer-proj="${index}" class="text-5xl font-black font-mono tracking-wider ${running ? 'text-brand-500 projector-timer' : 'text-white'}">${formatTime(left)}</span>
+                        <span class="text-xs font-bold tracking-widest uppercase mb-1 neon-timer-label">${esc(t.name)}</span>
+                        <span data-timer-proj="${index}" class="text-5xl font-black font-mono tracking-wider ${running ? 'neon-timer-live' : 'neon-timer'}">${formatTime(left)}</span>
                     `;
                     projContainer.appendChild(div);
                 });
