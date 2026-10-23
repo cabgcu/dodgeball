@@ -36,9 +36,36 @@
         
         /* Projector Mode Styles */
         #view-projection {
-            background-image: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+            background-color: #05010f;
+            background-image:
+                radial-gradient(ellipse at 15% 0%, rgba(232, 121, 249, 0.22) 0%, transparent 55%),
+                radial-gradient(ellipse at 85% 100%, rgba(34, 211, 238, 0.2) 0%, transparent 55%),
+                linear-gradient(rgba(168, 85, 247, 0.07) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(168, 85, 247, 0.07) 1px, transparent 1px);
+            background-size: 100% 100%, 100% 100%, 48px 48px, 48px 48px;
         }
         .projector-timer { text-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
+
+        /* Neon projector screen */
+        #view-projection .neon-title { color: #fff; text-shadow: 0 0 6px #fff, 0 0 18px #22d3ee, 0 0 40px #22d3ee; }
+        #view-projection .neon-title-accent { color: #ff4fa3; text-shadow: 0 0 6px #ff4fa3, 0 0 18px #ff2d95, 0 0 40px #ff2d95; }
+        #view-projection .neon-btn { background: rgba(5, 1, 15, 0.6); color: #a5f3fc; border: 2px solid #22d3ee; text-shadow: 0 0 6px rgba(34, 211, 238, 0.8); box-shadow: 0 0 10px rgba(34, 211, 238, 0.6), inset 0 0 8px rgba(34, 211, 238, 0.25); }
+        #view-projection .neon-btn:hover { background: rgba(34, 211, 238, 0.15); box-shadow: 0 0 16px #22d3ee, inset 0 0 12px rgba(34, 211, 238, 0.4); }
+        #view-projection .neon-panel { background: rgba(5, 1, 15, 0.55); border: 2px solid #a855f7; box-shadow: 0 0 18px rgba(168, 85, 247, 0.8), 0 0 50px rgba(168, 85, 247, 0.35), inset 0 0 30px rgba(168, 85, 247, 0.2); }
+        #view-projection .neon-timer-box { background: rgba(5, 1, 15, 0.7); border: 2px solid #e879f9; box-shadow: 0 0 12px rgba(232, 121, 249, 0.7), inset 0 0 10px rgba(232, 121, 249, 0.25); }
+        #view-projection .neon-timer-label { color: #f5d0fe; text-shadow: 0 0 6px rgba(232, 121, 249, 0.9); }
+        #view-projection .neon-timer { color: #cffafe; text-shadow: 0 0 6px #22d3ee, 0 0 20px #22d3ee; }
+        #view-projection .neon-timer-live { color: #ffd1e8; text-shadow: 0 0 6px #ff4fa3, 0 0 20px #ff2d95, 0 0 40px #ff2d95; }
+
+        /* Neon projector bracket */
+        #view-projection .neon-header { color: #67e8f9; text-shadow: 0 0 6px rgba(34, 211, 238, 0.9), 0 0 18px rgba(34, 211, 238, 0.6); }
+        #view-projection .neon-line { background: #f5d0fe; box-shadow: 0 0 4px #fff, 0 0 10px #e879f9, 0 0 20px #e879f9, 0 0 32px rgba(232, 121, 249, 0.7); }
+        #view-projection .neon-card { background: rgba(10, 15, 35, 0.92); border-color: #22d3ee; box-shadow: 0 0 8px #22d3ee, 0 0 22px rgba(34, 211, 238, 0.55), inset 0 0 12px rgba(34, 211, 238, 0.25); }
+        #view-projection .neon-divider { border-color: rgba(34, 211, 238, 0.5); }
+        #view-projection .neon-team { color: #f8fafc; text-shadow: 0 0 6px rgba(255, 255, 255, 0.45); }
+        #view-projection .neon-winner { background: rgba(57, 255, 20, 0.14); color: #6ee7a0; text-shadow: 0 0 6px #4ade80, 0 0 16px rgba(74, 222, 128, 0.7); }
+        #view-projection .neon-champ { background: rgba(10, 15, 35, 0.92); border-color: #f0abfc; box-shadow: 0 0 16px #e879f9, 0 0 44px rgba(232, 121, 249, 0.65), inset 0 0 22px rgba(232, 121, 249, 0.35); }
+        #view-projection .neon-champ-name { color: #fff; text-shadow: 0 0 8px #f0abfc, 0 0 22px #e879f9; }
 
         /* Rosters: a table on wide screens, a compact card per player on phones */
         @media (max-width: 767px) {
@@ -514,14 +541,14 @@
     <!-- Projector View (Hidden by default) -->
     <div id="view-projection" class="hidden h-screen overflow-hidden flex flex-col items-center p-6">
         <div class="w-full flex justify-between items-center gap-6 mb-6 shrink-0">
-            <h1 class="text-6xl font-black text-white uppercase italic drop-shadow-2xl">Dodgeball <span class="text-brand-500">After Dark</span></h1>
+            <h1 class="text-6xl font-black uppercase italic neon-title">Dodgeball <span class="neon-title-accent">After Dark</span></h1>
             <div class="flex gap-8" id="projection-timers-container"></div>
             <div class="flex gap-3">
-                <button onclick="toggleFullscreen()" class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg border border-slate-600 transition-colors shadow-lg">Full Screen</button>
-                <button onclick="closeProjectorMode()" class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg border border-slate-600 transition-colors shadow-lg">Exit Projector</button>
+                <button onclick="toggleFullscreen()" class="px-6 py-3 font-bold rounded-lg transition-colors neon-btn">Full Screen</button>
+                <button onclick="closeProjectorMode()" class="px-6 py-3 font-bold rounded-lg transition-colors neon-btn">Exit Projector</button>
             </div>
         </div>
-        <div id="proj-bracket-panel" class="w-full flex-1 min-h-0 overflow-hidden flex items-center justify-center bg-slate-800/50 p-6 rounded-3xl border border-slate-700 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+        <div id="proj-bracket-panel" class="w-full flex-1 min-h-0 overflow-hidden flex items-center justify-center p-6 rounded-3xl neon-panel">
             <div id="proj-bracket-sizer" class="relative shrink-0">
                 <div id="proj-bracket-inner" class="absolute top-0 left-0 w-max">
                     <div id="proj-bracket-headers" class="relative h-16 mb-8 w-full"></div>
@@ -1400,7 +1427,7 @@
             headers.style.width = totalW + 'px';
             for (let r = 0; r < numRounds; r++) {
                 const div = document.createElement('div');
-                div.className = `absolute text-center font-black uppercase tracking-widest ${isProjector ? 'text-lg' : 'text-sm'} ${dark ? 'text-slate-500' : 'text-slate-400'}`;
+                div.className = `absolute text-center font-black uppercase tracking-widest ${isProjector ? 'text-lg' : 'text-sm'} ${dark ? 'neon-header' : 'text-slate-400'}`;
                 div.style.left = (r * colW) + 'px';
                 div.style.width = cardW + 'px';
                 div.innerText = roundLabel(r, numRounds);
@@ -1418,7 +1445,8 @@
                 el.style.top = top + 'px';
                 el.style.width = Math.max(width, 2) + 'px';
                 el.style.height = Math.max(height, 2) + 'px';
-                el.style.background = lineColor;
+                if (dark) el.classList.add('neon-line');
+                else el.style.background = lineColor;
                 canvas.appendChild(el);
             };
 
@@ -1442,7 +1470,7 @@
 
                         const row = (team, slot) => {
                             let cls = `${rowSize} font-bold flex items-center justify-between gap-2 transition-colors`;
-                            if (slot === 1) cls += ` border-b ${dark ? 'border-slate-600' : 'border-slate-200'}`;
+                            if (slot === 1) cls += ` border-b ${dark ? 'neon-divider' : 'border-slate-200'}`;
                             if (editing && slotEditable(r, m, slot)) {
                                 return `<div class="${slot === 1 ? 'border-b border-slate-200' : ''} p-1 bg-amber-50">${slotSelect(r, m, slot, team)}</div>`;
                             }
@@ -1459,12 +1487,12 @@
                             let attrs = '';
                             let badge = '';
                             if (isWinner) {
-                                cls += dark ? ' bg-emerald-900/40 text-emerald-300' : ' bg-emerald-50 text-emerald-800';
+                                cls += dark ? ' neon-winner' : ' bg-emerald-50 text-emerald-800';
                                 badge = '<span class="shrink-0">✓</span>';
                             } else if (lost) {
                                 cls += dark ? ' bg-slate-900 text-slate-600 line-through' : ' bg-slate-100 text-slate-400 line-through';
                             } else {
-                                cls += dark ? ' text-slate-200' : ' text-slate-800';
+                                cls += dark ? ' neon-team' : ' text-slate-800';
                             }
                             if (isAdmin && isWinner && canUndo) {
                                 cls += ' cursor-pointer hover:bg-amber-600 hover:text-white';
@@ -1482,7 +1510,7 @@
                         };
 
                         mDiv.innerHTML = `
-                            <div class="rounded border shadow-sm flex flex-col overflow-hidden ${dark ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-300'}">
+                            <div class="rounded border shadow-sm flex flex-col overflow-hidden ${dark ? 'neon-card' : 'bg-white border-slate-300'}">
                                 ${row(match.team1, 1)}
                                 ${row(match.team2, 2)}
                             </div>`;
@@ -1501,12 +1529,12 @@
                         const attrs = canUndo ? `onclick="confirmUndoAdvance(${numRounds - 2}, 0)" title="Made a mistake? Click to undo the final"` : '';
                         const logoSize = isProjector ? 'h-32 w-32' : 'h-24 w-24';
                         mDiv.innerHTML = `
-                            <div class="rounded-xl shadow-xl border-2 p-4 text-center flex flex-col items-center justify-center ${champ ? 'bg-brand-600 border-brand-400' : (dark ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-300')} ${canUndo ? 'cursor-pointer admin-clickable' : ''}" ${attrs}>
+                            <div class="rounded-xl shadow-xl border-2 p-4 text-center flex flex-col items-center justify-center ${dark ? (champ ? 'neon-champ' : 'neon-card') : (champ ? 'bg-brand-600 border-brand-400' : 'bg-white border-slate-300')} ${canUndo ? 'cursor-pointer admin-clickable' : ''}" ${attrs}>
                                 ${champ
                                     ? `<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-yellow-300 mb-1" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2l2.39 4.84 5.34.78-3.86 3.77.91 5.32L10 14.2l-4.78 2.51.91-5.32L2.27 7.62l5.34-.78L10 2z"/></svg>`
                                     : `<img src="${LOGO_URL}" alt="Dodgeball After Dark logo" class="${logoSize} object-contain mb-2 drop-shadow-lg" onerror="this.style.display='none'">`}
-                                <span class="text-[10px] font-black uppercase tracking-[0.3em] ${champ ? 'text-brand-100' : (dark ? 'text-slate-400' : 'text-slate-500')}">Champion</span>
-                                <span class="font-black uppercase ${isProjector ? 'text-2xl' : 'text-xl'} truncate w-full ${champ ? 'text-white' : (dark ? 'text-slate-200' : 'text-slate-800')}" title="${champ ? esc(champ.name) : 'TBD'}">${champ ? esc(champ.name) : 'TBD'}</span>
+                                <span class="text-[10px] font-black uppercase tracking-[0.3em] ${dark ? 'neon-header' : (champ ? 'text-brand-100' : 'text-slate-500')}">Champion</span>
+                                <span class="font-black uppercase ${isProjector ? 'text-2xl' : 'text-xl'} truncate w-full ${dark ? 'neon-champ-name' : (champ ? 'text-white' : 'text-slate-800')}" title="${champ ? esc(champ.name) : 'TBD'}">${champ ? esc(champ.name) : 'TBD'}</span>
                                 ${canUndo ? '<span class="mt-1 text-[10px] uppercase tracking-wider text-brand-100">Click to undo</span>' : ''}
                             </div>`;
                     }
@@ -2108,10 +2136,10 @@
                     let running = t.isRunning && left > 0;
 
                     let div = document.createElement('div');
-                    div.className = "flex flex-col items-center bg-slate-900/80 px-6 py-2 rounded-xl border border-slate-700 shadow-inner";
+                    div.className = "flex flex-col items-center px-6 py-2 rounded-xl neon-timer-box";
                     div.innerHTML = `
-                        <span class="text-xs font-bold text-slate-400 tracking-widest uppercase mb-1">${esc(t.name)}</span>
-                        <span data-timer-proj="${index}" class="text-5xl font-black font-mono tracking-wider ${running ? 'text-brand-500 projector-timer' : 'text-white'}">${formatTime(left)}</span>
+                        <span class="text-xs font-bold tracking-widest uppercase mb-1 neon-timer-label">${esc(t.name)}</span>
+                        <span data-timer-proj="${index}" class="text-5xl font-black font-mono tracking-wider ${running ? 'neon-timer-live' : 'neon-timer'}">${formatTime(left)}</span>
                     `;
                     projContainer.appendChild(div);
                 });
