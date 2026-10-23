@@ -1222,6 +1222,49 @@ begin
   return '{}'::jsonb;
 end $$;
 
+/**
+ * Moves a player to another team, or to the waitlist when teamId is empty, without going over max_team_size.
+ * A captain who leaves hands the role on, like a removal; the player only captains the new team if it has none.
+ */
+create or replace function app_private.move_player(p jsonb) returns jsonb
+language plpgsql as $$
+declare
+  s app_private.settings := app_private.settings_row();
+  pl app_private.players;
+  t app_private.teams;
+  from_name text;
+  roster int;
+  has_captain boolean;
+begin
+  select * into pl from app_private.players where id = p->>'playerId';
+  if not found then perform app_private.fail('Player not found.'); end if;
+  select name into from_name from app_private.teams where id = pl.team_id;
+
+  if coalesce(p->>'teamId', '') <> '' then
+    select * into t from app_private.teams where id = p->>'teamId';
+    if not found then perform app_private.fail('Team not found.'); end if;
+    if t.id = pl.team_id then perform app_private.fail(pl.name || ' is already on "' || t.name || '".'); end if;
+    if t.eliminated then perform app_private.fail('"' || t.name || '" has been eliminated.'); end if;
+    select count(*), coalesce(bool_or(role = 'Captain'), false) into roster, has_captain from app_private.players where team_id = t.id;
+    if roster >= s.max_team_size then perform app_private.fail('"' || t.name || '" is already full (' || s.max_team_size || ' players).'); end if;
+  elsif pl.team_id is null then
+    perform app_private.fail(pl.name || ' is already on the waitlist.');
+  end if;
+
+  update app_private.players set team_id = t.id,
+    role = case when t.id is null then 'Player' when not has_captain then 'Captain' when pl.role = 'Alternate' then 'Alternate' else 'Player' end,
+    checked_in = case when t.id is null then false else checked_in end,
+    updated_at = now()
+  where id = pl.id;
+  if pl.role = 'Captain' and pl.team_id is not null then
+    update app_private.players set role = 'Captain', updated_at = now()
+    where id = (select id from app_private.players where team_id = pl.team_id order by (role = 'Alternate'), seq limit 1);
+  end if;
+
+  perform app_private.log('player:move', pl.name || ' <' || pl.email || '> ' || coalesce(from_name, 'waitlist') || ' -> ' || coalesce(t.name, 'waitlist'));
+  return jsonb_build_object('message', pl.name || ' moved to ' || coalesce('"' || t.name || '"', 'the waitlist') || '.');
+end $$;
+
 create or replace function app_private.delete_team_admin(p jsonb) returns jsonb
 language plpgsql as $$
 declare t app_private.teams; n int;
@@ -1514,7 +1557,7 @@ declare
   is_admin boolean;
   result jsonb;
   admin_actions constant text[] := array['setSetting', 'processWaitlist', 'fillTeam', 'resetBracket', 'addTeam', 'renameTeam', 'addPlayer',
-    'removePlayer', 'deleteTeam', 'toggleCheckIn', 'setTeamCheckIn', 'advanceTeam', 'undoAdvance', 'setBracketSlot', 'timer', 'emailEveryone'];
+    'removePlayer', 'movePlayer', 'deleteTeam', 'toggleCheckIn', 'setTeamCheckIn', 'advanceTeam', 'undoAdvance', 'setBracketSlot', 'timer', 'emailEveryone'];
 begin
   payload := coalesce(payload, '{}'::jsonb);
   is_admin := app_private.check_admin(token);
@@ -1543,6 +1586,7 @@ begin
     when 'renameTeam'       then result := app_private.rename_team(payload);
     when 'addPlayer'        then result := app_private.add_player(payload);
     when 'removePlayer'     then result := app_private.remove_player_admin(payload);
+    when 'movePlayer'       then result := app_private.move_player(payload);
     when 'deleteTeam'       then result := app_private.delete_team_admin(payload);
     when 'toggleCheckIn'    then result := app_private.toggle_check_in(payload);
     when 'setTeamCheckIn'   then result := app_private.set_team_check_in(payload);
